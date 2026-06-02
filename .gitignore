@@ -1,0 +1,22 @@
+# === Maven ===
+target/
+*.log
+*.jar
+*.war
+
+# === IntelliJ IDEA ===
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# === Java / Spring Boot ===
+*.class
+*.properties
+!application*.yml
+!application*.properties
+
+# === OS / Editors ===
+.DS_Store
+Thumbs.db
+*~
