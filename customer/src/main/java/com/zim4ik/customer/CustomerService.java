@@ -1,30 +1,47 @@
 package com.zim4ik.customer;
 
+import com.zim4ik.clients.fraud.FraudClient;
+import com.zim4ik.clients.fraud.FraudCheckResponse;
+import com.zim4ik.clients.notification.NotificationClient;
+import com.zim4ik.clients.notification.NotificationRequest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
+
+@Slf4j
 @Service
-public record CustomerService(CustomerRepository customerRepository, RestTemplate restTemplate) {
+@RequiredArgsConstructor
+public class CustomerService {
+
+    private final CustomerRepository customerRepository;
+    private final FraudClient fraudClient;
+    private final NotificationClient notificationClient;
+
     public void registerCustomer(CustomerRegistrationRequest request) {
         Customer customer = Customer.builder()
                 .firstName(request.firstName())
                 .lastName(request.lastName())
                 .email(request.email())
                 .build();
-        // todo: check if email valid
-        // todo: check if email not taken
-        customerRepository.saveAndFlush(customer);
-        // todo: check if fraudster
-        FraudCheckResponse fraudCheckResponse = restTemplate.getForObject(
-                "http://FRAUD/api/v1/fraud-check/{customerId}",
-                FraudCheckResponse.class,
-                customer.getId()
-        );
 
-        if (fraudCheckResponse.isFraudster()) {
-            throw new IllegalStateException("fraudster");
+        customerRepository.saveAndFlush(customer);
+        log.info("Saved customer with id: {}", customer.getId());
+
+
+        FraudCheckResponse fraudResponse = fraudClient.isFraudster(customer.getId());
+        if (fraudResponse.isFraudster()) {
+            throw new IllegalStateException("Customer is fraudulent");
         }
 
-        // todo: send notification
+
+        notificationClient.sendNotification(
+                new NotificationRequest(
+                        customer.getId(),
+                        customer.getEmail(),
+                        "Welcome, " + customer.getFirstName() + "!"
+                )
+        );
+        log.info("Sent notification for customer {}", customer.getId());
     }
 }

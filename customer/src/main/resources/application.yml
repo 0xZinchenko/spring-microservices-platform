@@ -24,3 +24,8 @@ eureka:
       defaultZone: http://localhost:8761/eureka
     fetch-registry: true
     register-with-eureka: true
+clients:
+  fraud:
+    url: ${FRAUD_URL:http://localhost:8081}
+  notification:
+    url: ${NOTIFICATION_URL:http://localhost:8082}

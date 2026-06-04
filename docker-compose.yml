@@ -30,6 +30,24 @@ services:
       - postgres
     restart: unless-stopped
 
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3.12-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - postgres
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 networks:
   postgres:
     driver: bridge
@@ -37,3 +55,5 @@ networks:
 volumes:
   postgres:
   pgadmin:
+
+
