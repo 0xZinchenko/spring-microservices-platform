@@ -18,6 +18,12 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
 eureka:
   client:
     service-url:
@@ -29,3 +35,9 @@ clients:
     url: ${FRAUD_URL:http://localhost:8081}
   notification:
     url: ${NOTIFICATION_URL:http://localhost:8082}
+
+rabbitmq:
+  exchange:
+    internal: internal.exchange
+  routing-key:
+    internal-notification: internal.notification.routing-key

@@ -2,12 +2,12 @@ package com.zim4ik.customer;
 
 import com.zim4ik.clients.fraud.FraudClient;
 import com.zim4ik.clients.fraud.FraudCheckResponse;
-import com.zim4ik.clients.notification.NotificationClient;
 import com.zim4ik.clients.notification.NotificationRequest;
+import com.zim4ik.customer.rabbitmq.RabbitMQMessageProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
 
 @Slf4j
 @Service
@@ -16,7 +16,14 @@ public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final FraudClient fraudClient;
-    private final NotificationClient notificationClient;
+    private final RabbitMQMessageProducer rabbitMQMessageProducer;
+
+
+    @Value("${rabbitmq.exchange.internal}")
+    private String internalExchange;
+
+    @Value("${rabbitmq.routing-key.internal-notification}")
+    private String internalNotificationRoutingKey;
 
     public void registerCustomer(CustomerRegistrationRequest request) {
         Customer customer = Customer.builder()
@@ -26,7 +33,7 @@ public class CustomerService {
                 .build();
 
         customerRepository.saveAndFlush(customer);
-        log.info("Saved customer with id: {}", customer.getId());
+        log.info("✅ Saved customer with id: {}", customer.getId());
 
 
         FraudCheckResponse fraudResponse = fraudClient.isFraudster(customer.getId());
@@ -34,14 +41,18 @@ public class CustomerService {
             throw new IllegalStateException("Customer is fraudulent");
         }
 
-
-        notificationClient.sendNotification(
-                new NotificationRequest(
-                        customer.getId(),
-                        customer.getEmail(),
-                        "Welcome, " + customer.getFirstName() + "!"
-                )
+        NotificationRequest notificationRequest = new NotificationRequest(
+                customer.getId(),
+                customer.getEmail(),
+                "Welcome, " + customer.getFirstName() + "!"
         );
-        log.info("Sent notification for customer {}", customer.getId());
+
+        rabbitMQMessageProducer.publish(
+                notificationRequest,
+                internalExchange,
+                internalNotificationRoutingKey
+        );
+
+        log.info("📤 Notification event sent for customer {}", customer.getId());
     }
 }
