@@ -1,0 +1,25 @@
+server:
+  port: 8222
+
+spring:
+  application:
+    name: gateway
+
+  cloud:
+    gateway:
+      routes:
+        - id: customer-service
+          uri: lb://customer
+          predicates:
+            - Path=/api/v1/customers/**
+
+        # === Маршрут для Fraud ===
+        # - id: fraud-service
+        #   uri: lb://fraud
+        #   predicates:
+        #     - Path=/api/v1/fraud-check/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka

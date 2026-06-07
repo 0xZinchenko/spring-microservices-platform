@@ -47,6 +47,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+#  gateway:
+#    container_name: gateway
+#    image: gateway:latest
+#    ports:
+#      - "8222:8222"
+#    networks:
+#      - postgres
+#    restart: unless-stopped
 
 networks:
   postgres:
