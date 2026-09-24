@@ -13,7 +13,7 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate  # schema is managed by Flyway (db/migration)
     properties:
       hibernate:
         format_sql: true
@@ -46,8 +46,6 @@ rabbitmq:
   routing-key:
     internal-notification: internal.notification.routing-key
 
-# Circuit breaker around Feign calls: after 50% failures out of the last 10 calls
-# the circuit opens and calls fail fast for 10s instead of waiting for timeouts
 resilience4j:
   circuitbreaker:
     configs:

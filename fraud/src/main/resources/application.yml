@@ -13,7 +13,7 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate  # schema is managed by Flyway (db/migration)
     properties:
       hibernate:
         format_sql: true
