@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// Turns exceptions into RFC 7807 "problem" responses instead of a generic 500
 @Slf4j
 @RestControllerAdvice
 public class CustomerExceptionHandler {
@@ -35,7 +34,6 @@ public class CustomerExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
     }
 
-    // Thrown by the Feign circuit breaker when fraud is down, too slow or the circuit is open
     @ExceptionHandler(NoFallbackAvailableException.class)
     public ProblemDetail handleFraudUnavailable(NoFallbackAvailableException e) {
         log.error("Fraud service call failed", e.getCause());

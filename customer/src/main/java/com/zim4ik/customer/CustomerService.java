@@ -17,8 +17,6 @@ public class CustomerService {
     private final FraudClient fraudClient;
     private final ApplicationEventPublisher eventPublisher;
 
-    // Everything below runs in one transaction: if the fraud check fails or
-    // rejects the customer, the insert is rolled back and nothing is published.
     @Transactional
     public Customer registerCustomer(CustomerRegistrationRequest request) {
         Customer customer = Customer.builder()
@@ -35,7 +33,6 @@ public class CustomerService {
             throw new CustomerFraudException(customer.getId());
         }
 
-        // Sent to RabbitMQ only after the transaction commits, see CustomerRegisteredListener
         eventPublisher.publishEvent(new CustomerRegisteredEvent(
                 customer.getId(),
                 customer.getEmail(),

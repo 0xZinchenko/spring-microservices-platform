@@ -9,7 +9,7 @@ spring:
     username: zim4ik
   jpa:
     hibernate:
-      ddl-auto: validate  # schema is managed by Flyway (db/migration)
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect

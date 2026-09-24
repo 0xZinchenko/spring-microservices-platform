@@ -3,8 +3,6 @@
 A learning project that shows a microservice architecture built with **Spring Boot 3** and **Spring Cloud**:
 service discovery, an API gateway, synchronous calls through OpenFeign and asynchronous messaging over RabbitMQ.
 
-> Project started: **2026-06-01**
-
 When a customer registers, the `customer` service:
 1. saves the customer to its own PostgreSQL database;
 2. calls `fraud` **synchronously** (OpenFeign) to check the customer;

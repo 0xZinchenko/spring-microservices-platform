@@ -22,7 +22,6 @@ public class CustomerRegisteredListener {
     @Value("${rabbitmq.routing-key.internal-notification}")
     private String internalNotificationRoutingKey;
 
-    // AFTER_COMMIT: a customer that was rolled back never gets a welcome notification
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCustomerRegistered(CustomerRegisteredEvent event) {
         NotificationRequest notificationRequest = new NotificationRequest(
