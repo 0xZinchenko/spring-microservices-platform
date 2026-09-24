@@ -54,6 +54,7 @@ The diagram below shows where the project is heading. Parts of it are not implem
 | Persistence | PostgreSQL, Spring Data JPA / Hibernate |
 | Database migrations | Flyway |
 | Validation | Jakarta Bean Validation |
+| Testing | JUnit 5, Mockito, AssertJ, Spring MockMvc, Testcontainers |
 | Build | Maven (multi-module) |
 | Infrastructure | Docker (multi-stage build), Docker Compose |
 | Other | Lombok |
@@ -239,12 +240,29 @@ curl http://localhost:8081/api/v1/fraud-check/1
 | `GET` | `/api/v1/fraud-check/{customerId}` | fraud | Check if a customer is a fraudster |
 | `POST` | `/api/v1/notification` | notification | Send a notification directly (sync, bypasses RabbitMQ) |
 
+## Tests
+
+```bash
+mvn test
+```
+
+Docker must be running: integration tests start real PostgreSQL and RabbitMQ containers with Testcontainers.
+
+| Service | Test | What it checks |
+|---|---|---|
+| customer | `CustomerServiceTest` | Registration logic with mocked dependencies |
+| customer | `CustomerControllerTest` | HTTP statuses `201`, `400`, `403`, `503` and error bodies |
+| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer saved, notification published after commit, rollback when the customer is a fraudster or `fraud` fails |
+| fraud | `FraudCheckServiceTest` | Fraud check result and history record |
+| fraud | `FraudCheckIntegrationTest` | Endpoint and Flyway schema on Postgres |
+| notification | `NotificationServiceTest` | Notification mapping |
+| notification | `NotificationConsumerIntegrationTest` | Message from RabbitMQ is consumed and stored in Postgres |
+
 ## Known limitations
 
 - `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
 - The gateway only routes `customer`; `fraud` and `notification` are internal services.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
-- No tests yet.
 - Credentials are hardcoded in `application.yml` (fine for local dev only).
 
 ## Roadmap
@@ -252,8 +270,8 @@ curl http://localhost:8081/api/v1/fraud-check/1
 - [ ] Real fraud-check logic
 - [ ] Distributed tracing (Micrometer Tracing + Zipkin)
 - [ ] Centralized configuration (Spring Cloud Config)
-- [ ] Unit and integration tests (Testcontainers)
 - [ ] Kubernetes deployment
+- [x] Unit and integration tests (Testcontainers)
 - [x] Dockerfile for every service and the full stack in Docker Compose
 - [x] Database migrations (Flyway) instead of `create-drop`
 - [x] Service discovery for Feign clients through Eureka
