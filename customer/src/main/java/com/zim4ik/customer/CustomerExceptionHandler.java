@@ -1,6 +1,7 @@
 package com.zim4ik.customer;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.client.circuitbreaker.NoFallbackAvailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -32,5 +33,13 @@ public class CustomerExceptionHandler {
     public ProblemDetail handleFraud(CustomerFraudException e) {
         log.warn(e.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
+    }
+
+    // Thrown by the Feign circuit breaker when fraud is down, too slow or the circuit is open
+    @ExceptionHandler(NoFallbackAvailableException.class)
+    public ProblemDetail handleFraudUnavailable(NoFallbackAvailableException e) {
+        log.error("Fraud service call failed", e.getCause());
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE, "Fraud check is temporarily unavailable, try again later");
     }
 }

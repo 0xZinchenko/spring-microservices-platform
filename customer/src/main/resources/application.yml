@@ -18,6 +18,15 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+      client:
+        config:
+          fraud:
+            connect-timeout: 2000
+            read-timeout: 3000
   rabbitmq:
     host: localhost
     port: 5672
@@ -36,3 +45,18 @@ rabbitmq:
     internal: internal.exchange
   routing-key:
     internal-notification: internal.notification.routing-key
+
+# Circuit breaker around Feign calls: after 50% failures out of the last 10 calls
+# the circuit opens and calls fail fast for 10s instead of waiting for timeouts
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 4s
