@@ -4,9 +4,11 @@ A learning project that shows a microservice architecture built with **Spring Bo
 service discovery, an API gateway, synchronous calls through OpenFeign and asynchronous messaging over RabbitMQ.
 
 When a customer registers, the `customer` service:
-1. saves the customer to its own PostgreSQL database;
-2. calls `fraud` **synchronously** (OpenFeign) to check the customer;
-3. publishes a notification event to RabbitMQ **asynchronously**, and `notification` consumes it and saves it.
+1. validates the request and saves the customer to its own PostgreSQL database;
+2. calls `fraud` **synchronously** (OpenFeign, resolved through Eureka, protected by a circuit breaker);
+3. if the check fails or `fraud` is unavailable, the whole registration is **rolled back**;
+4. after the transaction commits, publishes a notification event to RabbitMQ **asynchronously**,
+   and `notification` consumes it and saves it.
 
 ## Architecture
 
@@ -47,8 +49,11 @@ The diagram below shows where the project is heading. Parts of it are not implem
 | Service discovery | Spring Cloud Netflix Eureka |
 | API gateway | Spring Cloud Gateway |
 | Inter-service calls | Spring Cloud OpenFeign |
+| Fault tolerance | Resilience4j (circuit breaker, time limiter) |
 | Messaging | RabbitMQ 3.12 (Spring AMQP) |
 | Persistence | PostgreSQL, Spring Data JPA / Hibernate |
+| Database migrations | Flyway |
+| Validation | Jakarta Bean Validation |
 | Build | Maven (multi-module) |
 | Infrastructure | Docker Compose |
 | Other | Lombok |
@@ -75,6 +80,30 @@ Infrastructure (from `docker-compose.yml`):
 
 > These credentials are for local development only.
 
+## Project structure
+
+Each service is split into layered packages:
+
+```
+customer/src/main/
+├── java/com/zim4ik/customer/
+│   ├── CustomerApplication.java
+│   ├── config/        RabbitMQ message converter
+│   ├── controller/    REST endpoints
+│   ├── dto/           request / response records
+│   ├── entity/        JPA entities
+│   ├── event/         application events
+│   ├── exception/     custom exceptions and @RestControllerAdvice
+│   ├── rabbitmq/      message producer and event listener
+│   ├── repository/    Spring Data repositories
+│   └── service/       business logic
+└── resources/
+    ├── application.yml
+    └── db/migration/  Flyway SQL migrations
+```
+
+`fraud` and `notification` follow the same layout.
+
 ## Getting started
 
 ### Prerequisites
@@ -95,6 +124,9 @@ from [`docker/postgres/init.sql`](docker/postgres/init.sql).
 > The init script runs **only when the volume is empty**. If you already had the `postgres` volume
 > before this script was added, either create the databases manually in pgAdmin or recreate the volume:
 > `docker compose down -v && docker compose up -d` (this deletes all data).
+>
+> Tables are created by Flyway on service startup. If the databases still contain tables from the
+> old `create-drop` setup, Flyway refuses to run: recreate the volume with the command above.
 
 ### 2. Build the project
 
@@ -136,7 +168,31 @@ curl -i -X POST http://localhost:8222/api/v1/customers \
   -d '{"firstName":"Yan","lastName":"Zinchenko","email":"yan@example.com"}'
 ```
 
-Expected response: `200 OK` with an empty body.
+Expected response: `201 Created`
+
+```json
+{"customerId":1}
+```
+
+Possible error responses (in [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `ProblemDetail` format):
+
+| Status | When |
+|---|---|
+| `400 Bad Request` | Validation failed; the `errors` field lists the invalid fields |
+| `403 Forbidden` | The customer did not pass the fraud check |
+| `503 Service Unavailable` | `fraud` is down, too slow, or the circuit breaker is open |
+
+```json
+{
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Request validation failed",
+  "errors": {
+    "firstName": "must not be blank",
+    "email": "must be a well-formed email address"
+  }
+}
+```
 
 Check the fraud service directly:
 
@@ -165,9 +221,8 @@ curl http://localhost:8081/api/v1/fraud-check/1
 
 ## Known limitations
 
-- `FraudCheckService` is a stub: it always returns `isFraudster = false`.
-- `ddl-auto: create-drop`: all tables are recreated on every service restart, so data is lost.
-- The gateway only routes `customer`; the `fraud` route is commented out.
+- `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
+- The gateway only routes `customer`; `fraud` and `notification` are internal services.
 - Services are not containerized yet: there are no Dockerfiles, and the gateway entry in `docker-compose.yml` is commented out.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
 - No tests yet.
@@ -180,8 +235,12 @@ curl http://localhost:8081/api/v1/fraud-check/1
 - [ ] Distributed tracing (Micrometer Tracing + Zipkin)
 - [ ] Centralized configuration (Spring Cloud Config)
 - [ ] Unit and integration tests (Testcontainers)
-- [ ] Database migrations (Flyway) instead of `create-drop`
 - [ ] Kubernetes deployment
+- [x] Database migrations (Flyway) instead of `create-drop`
+- [x] Service discovery for Feign clients through Eureka
+- [x] Circuit breaker and timeouts for inter-service calls
+- [x] Request validation and consistent error responses
+- [x] Transactional registration: no customer is saved if the fraud check fails
 
 ## Author
 
