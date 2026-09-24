@@ -1,3 +1,190 @@
-# Microservices
-![Screenshot 2026-06-04](https://user-images.githubusercontent.com/40702606/144061535-7a42e85b-59d6-4f7f-9c35-18a48b49e6de.png)
+# Spring Cloud Microservices Platform
 
+A learning project that shows a microservice architecture built with **Spring Boot 3** and **Spring Cloud**:
+service discovery, an API gateway, synchronous calls through OpenFeign and asynchronous messaging over RabbitMQ.
+
+> Project started: **2026-06-01**
+
+When a customer registers, the `customer` service:
+1. saves the customer to its own PostgreSQL database;
+2. calls `fraud` **synchronously** (OpenFeign) to check the customer;
+3. publishes a notification event to RabbitMQ **asynchronously**, and `notification` consumes it and saves it.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    client([Client]) -->|HTTP :8222| gateway[API Gateway]
+    gateway -->|lb://customer| customer[Customer :8080]
+    customer -->|OpenFeign, sync| fraud[Fraud :8081]
+    customer -->|publish event| mq[(RabbitMQ<br/>internal.exchange)]
+    mq -->|notification.queue| notification[Notification :8082]
+
+    customer --- dbC[(PostgreSQL<br/>customer)]
+    fraud --- dbF[(PostgreSQL<br/>fraud)]
+    notification --- dbN[(PostgreSQL<br/>notification)]
+
+    eureka{{Eureka Server :8761}}
+    gateway -.register / discover.- eureka
+    customer -.register.- eureka
+    fraud -.register.- eureka
+    notification -.register.- eureka
+```
+
+<details>
+<summary>Target architecture (reference, 2026-06-01)</summary>
+
+The diagram below shows where the project is heading. Parts of it are not implemented yet
+(MongoDB, Kafka, Config Server, Zipkin, Docker registry). See [Roadmap](#roadmap).
+
+![Target architecture, 2026-06-01](https://user-images.githubusercontent.com/40702606/144061535-7a42e85b-59d6-4f7f-9c35-18a48b49e6de.png)
+</details>
+
+## Tech stack
+
+| Area | Technology |
+|---|---|
+| Language | Java 17 |
+| Framework | Spring Boot 3.3.2, Spring Cloud 2023.0.3 |
+| Service discovery | Spring Cloud Netflix Eureka |
+| API gateway | Spring Cloud Gateway |
+| Inter-service calls | Spring Cloud OpenFeign |
+| Messaging | RabbitMQ 3.12 (Spring AMQP) |
+| Persistence | PostgreSQL, Spring Data JPA / Hibernate |
+| Build | Maven (multi-module) |
+| Infrastructure | Docker Compose |
+| Other | Lombok |
+
+## Modules
+
+| Module | Purpose | Port |
+|---|---|---|
+| `eureka-server` | Service registry | 8761 |
+| `gateway` | Single entry point, routes `/api/v1/customers/**` to `customer` | 8222 |
+| `customer` | Customer registration, calls `fraud`, publishes notification events | 8080 |
+| `fraud` | Fraud check, stores check history | 8081 |
+| `notification` | Consumes events from RabbitMQ, stores notifications | 8082 |
+| `clients` | Shared library: Feign clients and DTOs (not a runnable service) | — |
+
+Infrastructure (from `docker-compose.yml`):
+
+| Service | URL / port | Credentials |
+|---|---|---|
+| PostgreSQL | `localhost:5432` | `zim4ik` / `password` |
+| pgAdmin | http://localhost:5050 | `pgadmin@admin.com` / `admin` |
+| RabbitMQ | `localhost:5672` | `guest` / `guest` |
+| RabbitMQ Management UI | http://localhost:15672 | `guest` / `guest` |
+
+> These credentials are for local development only.
+
+## Getting started
+
+### Prerequisites
+
+- JDK 17
+- Maven 3.9+
+- Docker with Docker Compose
+
+### 1. Start the infrastructure
+
+```bash
+docker compose up -d
+```
+
+On the first start, PostgreSQL creates the `customer`, `fraud` and `notification` databases
+from [`docker/postgres/init.sql`](docker/postgres/init.sql).
+
+> The init script runs **only when the volume is empty**. If you already had the `postgres` volume
+> before this script was added, either create the databases manually in pgAdmin or recreate the volume:
+> `docker compose down -v && docker compose up -d` (this deletes all data).
+
+### 2. Build the project
+
+```bash
+mvn clean install -DskipTests
+```
+
+### 3. Run the services
+
+Option A: script (starts Eureka, fraud, notification and customer):
+
+```bash
+./start-dev.sh
+```
+
+Then start the gateway in a separate terminal:
+
+```bash
+mvn spring-boot:run -pl gateway
+```
+
+Option B: start each service manually, **Eureka first**:
+
+```bash
+mvn spring-boot:run -pl eureka-server
+mvn spring-boot:run -pl fraud
+mvn spring-boot:run -pl notification
+mvn spring-boot:run -pl customer
+mvn spring-boot:run -pl gateway
+```
+
+## Usage
+
+Register a customer through the gateway:
+
+```bash
+curl -i -X POST http://localhost:8222/api/v1/customers \
+  -H "Content-Type: application/json" \
+  -d '{"firstName":"Yan","lastName":"Zinchenko","email":"yan@example.com"}'
+```
+
+Expected response: `200 OK` with an empty body.
+
+Check the fraud service directly:
+
+```bash
+curl http://localhost:8081/api/v1/fraud-check/1
+# {"isFraudster":false}
+```
+
+### How to verify the flow
+
+- **Eureka dashboard** (http://localhost:8761): `CUSTOMER`, `FRAUD`, `NOTIFICATION` and `GATEWAY` are registered.
+- **RabbitMQ UI** (http://localhost:15672): the `notification.queue` queue is bound to `internal.exchange`.
+- **pgAdmin** (http://localhost:5050):
+  - `customer` database has the new customer;
+  - `fraud` database has a row in `fraud_check_history`;
+  - `notification` database has a welcome notification.
+- **Logs**: `customer` prints `Notification event sent`, `notification` prints `Received from queue`.
+
+## API
+
+| Method | Path | Service | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/customers` | customer (via gateway) | Register a customer |
+| `GET` | `/api/v1/fraud-check/{customerId}` | fraud | Check if a customer is a fraudster |
+| `POST` | `/api/v1/notification` | notification | Send a notification directly (sync, bypasses RabbitMQ) |
+
+## Known limitations
+
+- `FraudCheckService` is a stub: it always returns `isFraudster = false`.
+- `ddl-auto: create-drop`: all tables are recreated on every service restart, so data is lost.
+- The gateway only routes `customer`; the `fraud` route is commented out.
+- Services are not containerized yet: there are no Dockerfiles, and the gateway entry in `docker-compose.yml` is commented out.
+- `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
+- No tests yet.
+- Credentials are hardcoded in `application.yml` (fine for local dev only).
+
+## Roadmap
+
+- [ ] Real fraud-check logic
+- [ ] Dockerfiles for every service and the full stack in Docker Compose
+- [ ] Distributed tracing (Micrometer Tracing + Zipkin)
+- [ ] Centralized configuration (Spring Cloud Config)
+- [ ] Unit and integration tests (Testcontainers)
+- [ ] Database migrations (Flyway) instead of `create-drop`
+- [ ] Kubernetes deployment
+
+## Author
+
+**Yan Zinchenko**, [GitHub @0xZinchenko](https://github.com/0xZinchenko)
