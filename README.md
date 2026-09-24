@@ -55,7 +55,7 @@ The diagram below shows where the project is heading. Parts of it are not implem
 | Database migrations | Flyway |
 | Validation | Jakarta Bean Validation |
 | Build | Maven (multi-module) |
-| Infrastructure | Docker Compose |
+| Infrastructure | Docker (multi-stage build), Docker Compose |
 | Other | Lombok |
 
 ## Modules
@@ -108,11 +108,31 @@ customer/src/main/
 
 ### Prerequisites
 
-- JDK 17
-- Maven 3.9+
 - Docker with Docker Compose
+- JDK 17 and Maven 3.9+ (only for running services locally, outside Docker)
 
-### 1. Start the infrastructure
+### Option 1: everything in Docker
+
+```bash
+docker compose --profile app up -d --build
+```
+
+This builds an image for each service from the shared multi-stage [`Dockerfile`](Dockerfile)
+and starts them together with PostgreSQL and RabbitMQ. Services wait for Postgres, RabbitMQ and
+Eureka to become healthy before starting. Give them ~30 seconds after startup to discover each other
+through Eureka; until then registration may return `503`.
+
+Stop everything:
+
+```bash
+docker compose --profile app down
+```
+
+### Option 2: infrastructure in Docker, services locally
+
+Useful while developing: run services from the IDE or Maven and only the infrastructure in Docker.
+
+#### 1. Start the infrastructure
 
 ```bash
 docker compose up -d
@@ -128,13 +148,13 @@ from [`docker/postgres/init.sql`](docker/postgres/init.sql).
 > Tables are created by Flyway on service startup. If the databases still contain tables from the
 > old `create-drop` setup, Flyway refuses to run: recreate the volume with the command above.
 
-### 2. Build the project
+#### 2. Build the project
 
 ```bash
 mvn clean install -DskipTests
 ```
 
-### 3. Run the services
+#### 3. Run the services
 
 Option A: script (starts Eureka, fraud, notification and customer):
 
@@ -223,7 +243,6 @@ curl http://localhost:8081/api/v1/fraud-check/1
 
 - `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
 - The gateway only routes `customer`; `fraud` and `notification` are internal services.
-- Services are not containerized yet: there are no Dockerfiles, and the gateway entry in `docker-compose.yml` is commented out.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
 - No tests yet.
 - Credentials are hardcoded in `application.yml` (fine for local dev only).
@@ -231,11 +250,11 @@ curl http://localhost:8081/api/v1/fraud-check/1
 ## Roadmap
 
 - [ ] Real fraud-check logic
-- [ ] Dockerfiles for every service and the full stack in Docker Compose
 - [ ] Distributed tracing (Micrometer Tracing + Zipkin)
 - [ ] Centralized configuration (Spring Cloud Config)
 - [ ] Unit and integration tests (Testcontainers)
 - [ ] Kubernetes deployment
+- [x] Dockerfile for every service and the full stack in Docker Compose
 - [x] Database migrations (Flyway) instead of `create-drop`
 - [x] Service discovery for Feign clients through Eureka
 - [x] Circuit breaker and timeouts for inter-service calls

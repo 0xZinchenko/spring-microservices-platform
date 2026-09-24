@@ -13,8 +13,13 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - postgres
+      - spring
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U zim4ik -d microservices" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   pgadmin:
     container_name: pgadmin
@@ -28,7 +33,7 @@ services:
     ports:
       - "5050:80"
     networks:
-      - postgres
+      - spring
     restart: unless-stopped
 
   rabbitmq:
@@ -41,28 +46,132 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     networks:
-      - postgres
+      - spring
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
-#  gateway:
-#    container_name: gateway
-#    image: gateway:latest
-#    ports:
-#      - "8222:8222"
-#    networks:
-#      - postgres
-#    restart: unless-stopped
+
+  eureka-server:
+    container_name: eureka-server
+    profiles: [ "app" ]
+    build:
+      context: .
+      args:
+        MODULE: eureka-server
+    image: zim4ik/eureka-server:latest
+    ports:
+      - "8761:8761"
+    networks:
+      - spring
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-fs", "http://localhost:8761/eureka/apps" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  gateway:
+    container_name: gateway
+    profiles: [ "app" ]
+    build:
+      context: .
+      args:
+        MODULE: gateway
+    image: zim4ik/gateway:latest
+    environment:
+      EUREKA_URL: http://eureka-server:8761/eureka
+      EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+    ports:
+      - "8222:8222"
+    networks:
+      - spring
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  customer:
+    container_name: customer
+    profiles: [ "app" ]
+    build:
+      context: .
+      args:
+        MODULE: customer
+    image: zim4ik/customer:latest
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/customer
+      SPRING_RABBITMQ_HOST: rabbitmq
+      EUREKA_URL: http://eureka-server:8761/eureka
+      EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+    ports:
+      - "8080:8080"
+    networks:
+      - spring
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  fraud:
+    container_name: fraud
+    profiles: [ "app" ]
+    build:
+      context: .
+      args:
+        MODULE: fraud
+    image: zim4ik/fraud:latest
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fraud
+      EUREKA_URL: http://eureka-server:8761/eureka
+      EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+    ports:
+      - "8081:8081"
+    networks:
+      - spring
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notification:
+    container_name: notification
+    profiles: [ "app" ]
+    build:
+      context: .
+      args:
+        MODULE: notification
+    image: zim4ik/notification:latest
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification
+      SPRING_RABBITMQ_ADDRESSES: rabbitmq:5672
+      EUREKA_URL: http://eureka-server:8761/eureka
+      EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+    ports:
+      - "8082:8082"
+    networks:
+      - spring
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    restart: unless-stopped
 
 networks:
-  postgres:
+  spring:
     driver: bridge
 
 volumes:
   postgres:
   pgadmin:
-
-

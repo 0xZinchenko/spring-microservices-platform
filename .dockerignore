@@ -1,0 +1,8 @@
+**/target
+.git
+.idea
+**/*.iml
+.claude
+docker
+*.md
+start-dev.sh
