@@ -1,7 +1,7 @@
 package com.zim4ik.notification.rabbitmq;
 
 import com.zim4ik.clients.notification.NotificationRequest;
-import com.zim4ik.notification.NotificationService;
+import com.zim4ik.notification.service.NotificationService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

@@ -1,6 +1,8 @@
-package com.zim4ik.notification;
+package com.zim4ik.notification.service;
 
 import com.zim4ik.clients.notification.NotificationRequest;
+import com.zim4ik.notification.entity.Notification;
+import com.zim4ik.notification.repository.NotificationRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 

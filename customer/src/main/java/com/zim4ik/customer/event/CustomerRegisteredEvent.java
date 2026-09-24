@@ -1,4 +1,4 @@
-package com.zim4ik.customer;
+package com.zim4ik.customer.event;
 
 public record CustomerRegisteredEvent(
         Integer customerId,

@@ -1,4 +1,4 @@
-package com.zim4ik.fraud;
+package com.zim4ik.fraud.entity;
 
 
 import jakarta.persistence.*;

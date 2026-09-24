@@ -1,4 +1,4 @@
-package com.zim4ik.customer;
+package com.zim4ik.customer.exception;
 
 public class CustomerFraudException extends RuntimeException {
 

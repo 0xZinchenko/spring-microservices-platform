@@ -1,6 +1,7 @@
-package com.zim4ik.notification;
+package com.zim4ik.notification.controller;
 
 import com.zim4ik.clients.notification.NotificationRequest;
+import com.zim4ik.notification.service.NotificationService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;

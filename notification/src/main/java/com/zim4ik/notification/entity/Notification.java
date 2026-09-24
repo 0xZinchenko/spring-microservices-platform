@@ -1,4 +1,4 @@
-package com.zim4ik.notification;
+package com.zim4ik.notification.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

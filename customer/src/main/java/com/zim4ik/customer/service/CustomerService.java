@@ -1,7 +1,12 @@
-package com.zim4ik.customer;
+package com.zim4ik.customer.service;
 
 import com.zim4ik.clients.fraud.FraudCheckResponse;
 import com.zim4ik.clients.fraud.FraudClient;
+import com.zim4ik.customer.dto.CustomerRegistrationRequest;
+import com.zim4ik.customer.entity.Customer;
+import com.zim4ik.customer.event.CustomerRegisteredEvent;
+import com.zim4ik.customer.exception.CustomerFraudException;
+import com.zim4ik.customer.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;

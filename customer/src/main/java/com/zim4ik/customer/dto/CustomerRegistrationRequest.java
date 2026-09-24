@@ -1,4 +1,4 @@
-package com.zim4ik.customer;
+package com.zim4ik.customer.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

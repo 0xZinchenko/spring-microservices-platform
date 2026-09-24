@@ -1,4 +1,4 @@
-package com.zim4ik.customer;
+package com.zim4ik.customer.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.client.circuitbreaker.NoFallbackAvailableException;

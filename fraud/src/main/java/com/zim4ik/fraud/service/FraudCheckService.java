@@ -1,5 +1,7 @@
-package com.zim4ik.fraud;
+package com.zim4ik.fraud.service;
 
+import com.zim4ik.fraud.entity.FraudCheckHistory;
+import com.zim4ik.fraud.repository.FraudCheckHistoryRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 

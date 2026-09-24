@@ -1,6 +1,10 @@
-package com.zim4ik.customer;
+package com.zim4ik.customer.controller;
 
 
+import com.zim4ik.customer.dto.CustomerRegistrationRequest;
+import com.zim4ik.customer.dto.CustomerRegistrationResponse;
+import com.zim4ik.customer.entity.Customer;
+import com.zim4ik.customer.service.CustomerService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

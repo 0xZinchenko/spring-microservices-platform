@@ -1,7 +1,7 @@
 package com.zim4ik.customer.rabbitmq;
 
 import com.zim4ik.clients.notification.NotificationRequest;
-import com.zim4ik.customer.CustomerRegisteredEvent;
+import com.zim4ik.customer.event.CustomerRegisteredEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

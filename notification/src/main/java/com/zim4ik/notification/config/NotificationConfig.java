@@ -1,4 +1,4 @@
-package com.zim4ik.notification;
+package com.zim4ik.notification.config;
 
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
