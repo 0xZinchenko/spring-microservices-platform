@@ -1,5 +1,7 @@
 # Spring Cloud Microservices Platform
 
+[![CI](https://github.com/0xZinchenko/spring-microservices-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/0xZinchenko/spring-microservices-platform/actions/workflows/ci.yml)
+
 A learning project that shows a microservice architecture built with **Spring Boot 3** and **Spring Cloud**:
 service discovery, an API gateway, synchronous calls through OpenFeign and asynchronous messaging over RabbitMQ.
 
@@ -247,6 +249,9 @@ mvn test
 ```
 
 Docker must be running: integration tests start real PostgreSQL and RabbitMQ containers with Testcontainers.
+
+On every push and pull request to `main`, [GitHub Actions](.github/workflows/ci.yml) runs the tests
+and builds the Docker images.
 
 | Service | Test | What it checks |
 |---|---|---|
