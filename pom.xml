@@ -24,10 +24,18 @@
         <spring.boot.maven.plugin.version>3.3.2</spring.boot.maven.plugin.version>
         <spring.boot.dependencies.version>3.3.2</spring.boot.dependencies.version>
         <spring.cloud.version>2023.0.3</spring.cloud.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
