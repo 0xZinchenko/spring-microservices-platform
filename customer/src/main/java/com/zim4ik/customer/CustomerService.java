@@ -1,13 +1,12 @@
 package com.zim4ik.customer;
 
-import com.zim4ik.clients.fraud.FraudClient;
 import com.zim4ik.clients.fraud.FraudCheckResponse;
-import com.zim4ik.clients.notification.NotificationRequest;
-import com.zim4ik.customer.rabbitmq.RabbitMQMessageProducer;
+import com.zim4ik.clients.fraud.FraudClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -16,16 +15,12 @@ public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final FraudClient fraudClient;
-    private final RabbitMQMessageProducer rabbitMQMessageProducer;
+    private final ApplicationEventPublisher eventPublisher;
 
-
-    @Value("${rabbitmq.exchange.internal}")
-    private String internalExchange;
-
-    @Value("${rabbitmq.routing-key.internal-notification}")
-    private String internalNotificationRoutingKey;
-
-    public void registerCustomer(CustomerRegistrationRequest request) {
+    // Everything below runs in one transaction: if the fraud check fails or
+    // rejects the customer, the insert is rolled back and nothing is published.
+    @Transactional
+    public Customer registerCustomer(CustomerRegistrationRequest request) {
         Customer customer = Customer.builder()
                 .firstName(request.firstName())
                 .lastName(request.lastName())
@@ -35,24 +30,18 @@ public class CustomerService {
         customerRepository.saveAndFlush(customer);
         log.info("✅ Saved customer with id: {}", customer.getId());
 
-
         FraudCheckResponse fraudResponse = fraudClient.isFraudster(customer.getId());
-        if (fraudResponse.isFraudster()) {
-            throw new IllegalStateException("Customer is fraudulent");
+        if (Boolean.TRUE.equals(fraudResponse.isFraudster())) {
+            throw new CustomerFraudException(customer.getId());
         }
 
-        NotificationRequest notificationRequest = new NotificationRequest(
+        // Sent to RabbitMQ only after the transaction commits, see CustomerRegisteredListener
+        eventPublisher.publishEvent(new CustomerRegisteredEvent(
                 customer.getId(),
                 customer.getEmail(),
-                "Welcome, " + customer.getFirstName() + "!"
-        );
+                customer.getFirstName()
+        ));
 
-        rabbitMQMessageProducer.publish(
-                notificationRequest,
-                internalExchange,
-                internalNotificationRoutingKey
-        );
-
-        log.info("📤 Notification event sent for customer {}", customer.getId());
+        return customer;
     }
 }
