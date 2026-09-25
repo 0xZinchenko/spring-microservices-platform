@@ -11,10 +11,10 @@ import com.zim4ik.customer.exception.CustomerFraudException;
 import com.zim4ik.customer.repository.CustomerRepository;
 import com.zim4ik.customer.repository.OutboxEventRepository;
 import com.zim4ik.customer.service.CustomerService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Message;
@@ -26,10 +26,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
 
@@ -105,7 +105,7 @@ class CustomerRegistrationIntegrationTest {
     @Autowired
     private Binding testNotificationBinding;
 
-    @MockBean
+    @MockitoBean
     private FraudClient fraudClient;
 
     @BeforeEach

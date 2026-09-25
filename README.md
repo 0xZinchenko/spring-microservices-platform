@@ -99,7 +99,7 @@ gateway       SERVER    POST /api/v1/customers
 | Area | Technology |
 |---|---|
 | Language | Java 17 |
-| Framework | Spring Boot 3.3.2, Spring Cloud 2023.0.3 |
+| Framework | Spring Boot 3.5.16, Spring Cloud 2025.0.3 |
 | Service discovery | Spring Cloud Netflix Eureka |
 | API gateway | Spring Cloud Gateway |
 | Inter-service calls | Spring Cloud OpenFeign |

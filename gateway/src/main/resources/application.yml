@@ -7,17 +7,19 @@ spring:
 
   cloud:
     gateway:
-      routes:
-        - id: customer-service
-          uri: lb://customer
-          predicates:
-            - Path=/api/v1/customers/**
+      server:
+        webflux:
+          routes:
+            - id: customer-service
+              uri: lb://customer
+              predicates:
+                - Path=/api/v1/customers/**
 
-        # === Маршрут для Fraud ===
-        # - id: fraud-service
-        #   uri: lb://fraud
-        #   predicates:
-        #     - Path=/api/v1/fraud-check/**
+            # === Маршрут для Fraud ===
+            # - id: fraud-service
+            #   uri: lb://fraud
+            #   predicates:
+            #     - Path=/api/v1/fraud-check/**
 
 eureka:
   client:
