@@ -1,7 +1,7 @@
-package com.zim4ik.customer.rabbitmq;
+package com.zim4ik.customer.event;
 
 import com.zim4ik.clients.notification.NotificationRequest;
-import com.zim4ik.customer.event.CustomerRegisteredEvent;
+import com.zim4ik.customer.service.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +14,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class CustomerRegisteredListener {
 
-    private final RabbitMQMessageProducer rabbitMQMessageProducer;
+    private final OutboxService outboxService;
 
     @Value("${rabbitmq.exchange.internal}")
     private String internalExchange;
@@ -22,7 +22,7 @@ public class CustomerRegisteredListener {
     @Value("${rabbitmq.routing-key.internal-notification}")
     private String internalNotificationRoutingKey;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onCustomerRegistered(CustomerRegisteredEvent event) {
         NotificationRequest notificationRequest = new NotificationRequest(
                 event.customerId(),
@@ -30,12 +30,8 @@ public class CustomerRegisteredListener {
                 "Welcome, " + event.firstName() + "!"
         );
 
-        rabbitMQMessageProducer.publish(
-                notificationRequest,
-                internalExchange,
-                internalNotificationRoutingKey
-        );
+        outboxService.enqueue(internalExchange, internalNotificationRoutingKey, notificationRequest);
 
-        log.info("📤 Notification event sent for customer {}", event.customerId());
+        log.info("📥 Notification event stored in outbox for customer {}", event.customerId());
     }
 }

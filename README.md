@@ -9,8 +9,27 @@ When a customer registers, the `customer` service:
 1. validates the request and saves the customer to its own PostgreSQL database;
 2. calls `fraud` **synchronously** (OpenFeign, resolved through Eureka, protected by a circuit breaker);
 3. if the check fails or `fraud` is unavailable, the whole registration is **rolled back**;
-4. after the transaction commits, publishes a notification event to RabbitMQ **asynchronously**,
-   and `notification` consumes it and saves it.
+4. stores a notification event in the `outbox_event` table **in the same transaction** as the customer;
+5. a scheduled publisher sends pending outbox events to RabbitMQ **asynchronously**,
+   and `notification` consumes them and saves them.
+
+### Transactional Outbox
+
+Publishing to RabbitMQ directly after the commit can lose messages: the customer is already saved,
+but if the broker is down at that moment the notification is gone. Instead:
+
+- the event is written to `outbox_event` in the same database transaction as the customer,
+  so either both are saved or neither is;
+- `OutboxPublisher` polls unpublished events every second, sends them with publisher confirms
+  and marks them published only after RabbitMQ acknowledges them;
+- if RabbitMQ is unavailable, the event stays in the table (`attempts` and `last_error` are updated)
+  and is retried until it is delivered;
+- rows are selected with `FOR UPDATE SKIP LOCKED`, so several `customer` instances never send
+  the same event twice at the same time.
+
+Delivery is **at-least-once**: a message can be delivered more than once (for example, if the service
+crashes after RabbitMQ confirmed the message but before the row was marked as published).
+Each message carries the outbox event id as `messageId`.
 
 ## Architecture
 
@@ -95,9 +114,9 @@ customer/src/main/
 │   ├── controller/    REST endpoints
 │   ├── dto/           request / response records
 │   ├── entity/        JPA entities
-│   ├── event/         application events
+│   ├── event/         application events and listeners
 │   ├── exception/     custom exceptions and @RestControllerAdvice
-│   ├── rabbitmq/      message producer and event listener
+│   ├── rabbitmq/      outbox publisher
 │   ├── repository/    Spring Data repositories
 │   └── service/       business logic
 └── resources/
@@ -257,7 +276,8 @@ and builds the Docker images.
 |---|---|---|
 | customer | `CustomerServiceTest` | Registration logic with mocked dependencies |
 | customer | `CustomerControllerTest` | HTTP statuses `201`, `400`, `403`, `503` and error bodies |
-| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer saved, notification published after commit, rollback when the customer is a fraudster or `fraud` fails |
+| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message, rollback when the customer is a fraudster or `fraud` fails |
+| customer | `OutboxPublisherTest` | Message format, marking events as published, recording failed attempts |
 | fraud | `FraudCheckServiceTest` | Fraud check result and history record |
 | fraud | `FraudCheckIntegrationTest` | Endpoint and Flyway schema on Postgres |
 | notification | `NotificationServiceTest` | Notification mapping |
@@ -265,6 +285,8 @@ and builds the Docker images.
 
 ## Known limitations
 
+- Published outbox rows are never deleted; a cleanup job is needed for long-running systems.
+- The `notification` consumer is not idempotent yet, so a redelivered message creates a duplicate notification.
 - `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
 - The gateway only routes `customer`; `fraud` and `notification` are internal services.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
@@ -283,6 +305,7 @@ and builds the Docker images.
 - [x] Circuit breaker and timeouts for inter-service calls
 - [x] Request validation and consistent error responses
 - [x] Transactional registration: no customer is saved if the fraud check fails
+- [x] Transactional Outbox for reliable event publishing
 
 ## Author
 

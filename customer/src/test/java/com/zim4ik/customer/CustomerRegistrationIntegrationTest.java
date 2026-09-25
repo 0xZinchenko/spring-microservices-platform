@@ -5,16 +5,18 @@ import com.zim4ik.clients.fraud.FraudClient;
 import com.zim4ik.clients.notification.NotificationRequest;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
 import com.zim4ik.customer.entity.Customer;
+import com.zim4ik.customer.entity.OutboxEvent;
 import com.zim4ik.customer.exception.CustomerFraudException;
 import com.zim4ik.customer.repository.CustomerRepository;
+import com.zim4ik.customer.repository.OutboxEventRepository;
 import com.zim4ik.customer.service.CustomerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,15 +30,19 @@ import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 @Testcontainers
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
-        "spring.cloud.discovery.enabled=false"
+        "spring.cloud.discovery.enabled=false",
+        "outbox.publisher.fixed-delay=200"
 })
 class CustomerRegistrationIntegrationTest {
 
@@ -57,19 +63,14 @@ class CustomerRegistrationIntegrationTest {
     static class TestQueueConfig {
 
         @Bean
-        TopicExchange internalExchange() {
-            return new TopicExchange("internal.exchange");
-        }
-
-        @Bean
         Queue testNotificationQueue() {
             return new Queue(TEST_QUEUE);
         }
 
         @Bean
-        Binding testNotificationBinding() {
-            return BindingBuilder.bind(testNotificationQueue())
-                    .to(internalExchange())
+        Binding testNotificationBinding(Queue testNotificationQueue, TopicExchange internalTopicExchange) {
+            return BindingBuilder.bind(testNotificationQueue)
+                    .to(internalTopicExchange)
                     .with("internal.notification.routing-key");
         }
     }
@@ -81,22 +82,27 @@ class CustomerRegistrationIntegrationTest {
     private CustomerRepository customerRepository;
 
     @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
+    @Autowired
     private RabbitTemplate rabbitTemplate;
 
     @Autowired
-    private AmqpAdmin amqpAdmin;
+    private RabbitAdmin rabbitAdmin;
 
     @MockBean
     private FraudClient fraudClient;
 
     @BeforeEach
     void setUp() {
+        rabbitAdmin.initialize();
+        outboxEventRepository.deleteAll();
         customerRepository.deleteAll();
-        amqpAdmin.purgeQueue(TEST_QUEUE, false);
+        rabbitAdmin.purgeQueue(TEST_QUEUE, false);
     }
 
     @Test
-    void registerCustomer_persistsCustomerAndPublishesNotification() {
+    void registerCustomer_persistsCustomerAndPublishesNotificationThroughOutbox() {
         when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
 
         Customer customer = customerService.registerCustomer(REQUEST);
@@ -106,10 +112,39 @@ class CustomerRegistrationIntegrationTest {
                 .extracting(Customer::getEmail)
                 .isEqualTo("yan@example.com");
 
-        NotificationRequest notification = rabbitTemplate.receiveAndConvert(
-                TEST_QUEUE, 5000, new ParameterizedTypeReference<>() {});
-        assertThat(notification).isEqualTo(
+        assertThat(receiveNotification()).isEqualTo(
                 new NotificationRequest(customer.getId(), "yan@example.com", "Welcome, Yan!"));
+
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+                assertThat(outboxEventRepository.findAll())
+                        .singleElement()
+                        .extracting(OutboxEvent::getPublishedAt)
+                        .isNotNull());
+    }
+
+    @Test
+    void registerCustomer_keepsEventInOutboxAndRetries_whenBrokerRejectsMessage() {
+        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        rabbitAdmin.deleteExchange("internal.exchange");
+
+        Customer customer = customerService.registerCustomer(REQUEST);
+
+        assertThat(customerRepository.existsById(customer.getId())).isTrue();
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(outboxEventRepository.findAll())
+                        .singleElement()
+                        .satisfies(event -> {
+                            assertThat(event.getPublishedAt()).isNull();
+                            assertThat(event.getAttempts()).isPositive();
+                            assertThat(event.getLastError()).isNotBlank();
+                        }));
+
+        rabbitAdmin.initialize();
+
+        assertThat(receiveNotification()).isEqualTo(
+                new NotificationRequest(customer.getId(), "yan@example.com", "Welcome, Yan!"));
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+                assertThat(outboxEventRepository.countByPublishedAtIsNull()).isZero());
     }
 
     @Test
@@ -120,6 +155,7 @@ class CustomerRegistrationIntegrationTest {
                 .isInstanceOf(CustomerFraudException.class);
 
         assertThat(customerRepository.count()).isZero();
+        assertThat(outboxEventRepository.count()).isZero();
         assertThat(rabbitTemplate.receive(TEST_QUEUE, 1000)).isNull();
     }
 
@@ -131,6 +167,11 @@ class CustomerRegistrationIntegrationTest {
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(customerRepository.count()).isZero();
+        assertThat(outboxEventRepository.count()).isZero();
         assertThat(rabbitTemplate.receive(TEST_QUEUE, 1000)).isNull();
+    }
+
+    private NotificationRequest receiveNotification() {
+        return rabbitTemplate.receiveAndConvert(TEST_QUEUE, 10000, new ParameterizedTypeReference<>() {});
     }
 }
