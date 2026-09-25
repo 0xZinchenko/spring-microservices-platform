@@ -19,6 +19,15 @@ spring:
     base-url: http://localhost:9411
   rabbitmq:
     addresses: localhost:5672
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 10s
   profiles:
     active: default
 eureka:
@@ -32,7 +41,9 @@ eureka:
 rabbitmq:
   exchanges:
     internal: internal.exchange
+    dead-letter: internal.dlx
   queues:
     notification: notification.queue
+    notification-dead-letter: notification.queue.dlq
   routing-keys:
     internal-notification: internal.notification.routing-key

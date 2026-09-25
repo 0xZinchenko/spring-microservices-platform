@@ -60,7 +60,7 @@ class OutboxPublisherTest {
         verify(operations).send(eq("internal.exchange"), eq("internal.notification.routing-key"), message.capture());
         verify(operations).waitForConfirmsOrDie(anyLong());
         assertThat(new String(message.getValue().getBody(), StandardCharsets.UTF_8)).isEqualTo("{\"id\":1}");
-        assertThat(message.getValue().getMessageProperties().getMessageId()).isEqualTo("1");
+        assertThat(message.getValue().getMessageProperties().getMessageId()).isEqualTo("customer-outbox-1");
         assertThat(message.getValue().getMessageProperties().<String>getHeader("__TypeId__"))
                 .isEqualTo("com.example.Payload");
         assertThat(event.getPublishedAt()).isNotNull();

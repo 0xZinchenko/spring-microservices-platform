@@ -53,7 +53,7 @@ public class OutboxPublisher {
         MessageProperties properties = new MessageProperties();
         properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
         properties.setContentEncoding(StandardCharsets.UTF_8.name());
-        properties.setMessageId(String.valueOf(event.getId()));
+        properties.setMessageId("customer-outbox-" + event.getId());
         properties.setHeader("__TypeId__", event.getPayloadType());
         Message message = new Message(event.getPayload().getBytes(StandardCharsets.UTF_8), properties);
 

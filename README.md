@@ -29,7 +29,16 @@ but if the broker is down at that moment the notification is gone. Instead:
 
 Delivery is **at-least-once**: a message can be delivered more than once (for example, if the service
 crashes after RabbitMQ confirmed the message but before the row was marked as published).
-Each message carries the outbox event id as `messageId`.
+Each message carries a unique `messageId` (`customer-outbox-<id>`), which lets the consumer detect duplicates.
+
+### Retries, Dead Letter Queue and idempotency
+
+- If `notification` fails to process a message, it is retried **3 times** with exponential backoff (1s, 2s).
+- After the last attempt, or immediately for a malformed message, it is moved to the
+  **Dead Letter Queue** `notification.queue.dlq` (via the `internal.dlx` exchange) instead of being
+  redelivered forever. Messages in the DLQ can be inspected in the RabbitMQ UI.
+- The consumer is **idempotent**: the `messageId` is stored as `source_message_id`, so a message that
+  is delivered twice is skipped. A unique index on that column guards against concurrent duplicates.
 
 ## Architecture
 
@@ -167,6 +176,10 @@ from [`docker/postgres/init.sql`](docker/postgres/init.sql).
 > before this script was added, either create the databases manually in pgAdmin or recreate the volume:
 > `docker compose down -v && docker compose up -d` (this deletes all data).
 >
+> If a `rabbitmq` container from an older version of the project is still running, recreate it
+> (`docker compose up -d --force-recreate rabbitmq`): `notification.queue` now has dead-letter
+> arguments, and RabbitMQ refuses to redeclare an existing queue with different arguments.
+>
 > Tables are created by Flyway on service startup. If the databases still contain tables from the
 > old `create-drop` setup, Flyway refuses to run: recreate the volume with the command above.
 
@@ -280,13 +293,12 @@ and builds the Docker images.
 | customer | `OutboxPublisherTest` | Message format, marking events as published, recording failed attempts |
 | fraud | `FraudCheckServiceTest` | Fraud check result and history record |
 | fraud | `FraudCheckIntegrationTest` | Endpoint and Flyway schema on Postgres |
-| notification | `NotificationServiceTest` | Notification mapping |
-| notification | `NotificationConsumerIntegrationTest` | Message from RabbitMQ is consumed and stored in Postgres |
+| notification | `NotificationServiceTest` | Notification mapping and skipping duplicates |
+| notification | `NotificationConsumerIntegrationTest` | Message from RabbitMQ is stored in Postgres, duplicates are ignored, failing and malformed messages end up in the DLQ |
 
 ## Known limitations
 
 - Published outbox rows are never deleted; a cleanup job is needed for long-running systems.
-- The `notification` consumer is not idempotent yet, so a redelivered message creates a duplicate notification.
 - `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
 - The gateway only routes `customer`; `fraud` and `notification` are internal services.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
@@ -306,6 +318,7 @@ and builds the Docker images.
 - [x] Request validation and consistent error responses
 - [x] Transactional registration: no customer is saved if the fraud check fails
 - [x] Transactional Outbox for reliable event publishing
+- [x] Retries, Dead Letter Queue and idempotent consumer
 
 ## Author
 

@@ -5,6 +5,8 @@ import com.zim4ik.notification.service.NotificationService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,8 +17,9 @@ public class NotificationConsumer {
     private final NotificationService notificationService;
 
     @RabbitListener(queues = "${rabbitmq.queues.notification}")
-    public void consume(NotificationRequest request) {
-        log.info("📩 Received from queue: {}", request);
-        notificationService.send(request);
+    public void consume(NotificationRequest request,
+                        @Header(name = AmqpHeaders.MESSAGE_ID, required = false) String messageId) {
+        log.info("📩 Received from queue: {} (messageId={})", request, messageId);
+        notificationService.send(request, messageId);
     }
 }
