@@ -13,13 +13,17 @@ import com.zim4ik.customer.repository.OutboxEventRepository;
 import com.zim4ik.customer.service.CustomerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -39,10 +43,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@AutoConfigureObservability(metrics = false)
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
-        "outbox.publisher.fixed-delay=200"
+        "outbox.publisher.fixed-delay=200",
+        "management.zipkin.tracing.export.enabled=false"
 })
 class CustomerRegistrationIntegrationTest {
 
@@ -92,6 +98,12 @@ class CustomerRegistrationIntegrationTest {
 
     @Autowired
     private RabbitAdmin rabbitAdmin;
+
+    @Autowired
+    private Tracer tracer;
+
+    @Autowired
+    private Binding testNotificationBinding;
 
     @MockBean
     private FraudClient fraudClient;
@@ -151,6 +163,28 @@ class CustomerRegistrationIntegrationTest {
     }
 
     @Test
+    void registerCustomer_keepsEventInOutboxAndRetries_whenMessageIsUnroutable() {
+        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        rabbitAdmin.removeBinding(testNotificationBinding);
+
+        Customer customer = customerService.registerCustomer(REQUEST);
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(outboxEventRepository.findAll())
+                        .singleElement()
+                        .satisfies(event -> {
+                            assertThat(event.getPublishedAt()).isNull();
+                            assertThat(event.getAttempts()).isPositive();
+                            assertThat(event.getLastError()).contains("unroutable");
+                        }));
+
+        rabbitAdmin.declareBinding(testNotificationBinding);
+
+        assertThat(receiveNotification()).isEqualTo(
+                new NotificationRequest(customer.getId(), "yan@example.com", "Welcome, Yan!"));
+    }
+
+    @Test
     void registerCustomer_rollsBackAndSendsNothing_whenFraudster() {
         when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(true));
 
@@ -186,6 +220,23 @@ class CustomerRegistrationIntegrationTest {
         assertThat(customerRepository.count()).isEqualTo(1);
         assertThat(outboxEventRepository.count()).isEqualTo(1);
         verify(fraudClient, times(1)).isFraudster(anyInt());
+    }
+
+    @Test
+    void registerCustomer_propagatesTraceContextThroughOutboxToRabbitMq() {
+        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        Span requestSpan = tracer.nextSpan().name("test request").start();
+        try (Tracer.SpanInScope ignored = tracer.withSpan(requestSpan)) {
+            customerService.registerCustomer(REQUEST);
+        } finally {
+            requestSpan.end();
+        }
+
+        Message message = rabbitTemplate.receive(TEST_QUEUE, 10000);
+
+        assertThat(message).isNotNull();
+        assertThat(message.getMessageProperties().<String>getHeader("traceparent"))
+                .contains(requestSpan.context().traceId());
     }
 
     private NotificationRequest receiveNotification() {

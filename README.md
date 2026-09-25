@@ -20,10 +20,12 @@ but if the broker is down at that moment the notification is gone. Instead:
 
 - the event is written to `outbox_event` in the same database transaction as the customer,
   so either both are saved or neither is;
-- `OutboxPublisher` polls unpublished events every second, sends them with publisher confirms
-  and marks them published only after RabbitMQ acknowledges them;
+- `OutboxPublisher` polls unpublished events every second and marks them published only after
+  RabbitMQ acknowledges them;
 - if RabbitMQ is unavailable, the event stays in the table (`attempts` and `last_error` are updated)
   and is retried until it is delivered;
+- messages are sent with **correlated publisher confirms** and the `mandatory` flag: if the broker
+  rejects the message or it cannot be routed to any queue, the event is not marked as published;
 - rows are selected with `FOR UPDATE SKIP LOCKED`, so several `customer` instances never send
   the same event twice at the same time.
 
@@ -65,10 +67,32 @@ flowchart LR
 <summary>Target architecture (reference, 2026-06-01)</summary>
 
 The diagram below shows where the project is heading. Parts of it are not implemented yet
-(MongoDB, Kafka, Config Server, Zipkin, Docker registry). See [Roadmap](#roadmap).
+(MongoDB, Kafka, Config Server, Docker registry). See [Roadmap](#roadmap).
 
 ![Target architecture, 2026-06-01](https://user-images.githubusercontent.com/40702606/144061535-7a42e85b-59d6-4f7f-9c35-18a48b49e6de.png)
 </details>
+
+## Observability
+
+Every request gets a trace id that follows it through all services, including the asynchronous part:
+
+```
+gateway       SERVER    POST /api/v1/customers
+  customer    SERVER    POST /api/v1/customers
+    customer            circuit-breaker
+      fraud   SERVER    GET /api/v1/fraud-check/{customerId}
+    customer            outbox publish
+      customer PRODUCER internal.exchange send
+        notification CONSUMER notification.queue receive
+```
+
+- Open **Zipkin** at http://localhost:9411 and click *Run query* to see traces.
+- Log lines contain `[service,traceId,spanId]`, so logs of one request can be found across services.
+- The outbox stores the trace context (`traceparent` header) together with the event, and the publisher
+  restores it. That is why the RabbitMQ part stays in the same trace, even though it is sent later by a
+  scheduled job.
+- Each service exposes `GET /actuator/health` (database, RabbitMQ, discovery) and `GET /actuator/info`.
+  Docker Compose uses the health endpoint for container healthchecks.
 
 ## Tech stack
 
@@ -80,6 +104,7 @@ The diagram below shows where the project is heading. Parts of it are not implem
 | API gateway | Spring Cloud Gateway |
 | Inter-service calls | Spring Cloud OpenFeign |
 | Fault tolerance | Resilience4j (circuit breaker, time limiter) |
+| Observability | Spring Boot Actuator, Micrometer Tracing (Brave), Zipkin |
 | Messaging | RabbitMQ 3.12 (Spring AMQP) |
 | Persistence | PostgreSQL, Spring Data JPA / Hibernate |
 | Database migrations | Flyway |
@@ -108,6 +133,7 @@ Infrastructure (from `docker-compose.yml`):
 | pgAdmin | http://localhost:5050 | `pgadmin@admin.com` / `admin` |
 | RabbitMQ | `localhost:5672` | `guest` / `guest` |
 | RabbitMQ Management UI | http://localhost:15672 | `guest` / `guest` |
+| Zipkin | http://localhost:9411 | — |
 
 > These credentials are for local development only.
 
@@ -290,8 +316,8 @@ and builds the Docker images.
 |---|---|---|
 | customer | `CustomerServiceTest` | Registration logic with mocked dependencies |
 | customer | `CustomerControllerTest` | HTTP statuses `201`, `400`, `403`, `409`, `503` and error bodies |
-| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message, rollback when the customer is a fraudster or `fraud` fails, duplicate email rejected |
-| customer | `OutboxPublisherTest` | Message format, marking events as published, recording failed attempts |
+| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message or it is unroutable, trace context propagated to RabbitMQ, rollback when the customer is a fraudster or `fraud` fails, duplicate email rejected |
+| customer | `OutboxPublisherTest` | Message format, publisher confirms (ack / nack), recording failed attempts |
 | fraud | `FraudCheckServiceTest` | Fraud check result and history record |
 | fraud | `FraudCheckIntegrationTest` | Endpoint and Flyway schema on Postgres |
 | notification | `NotificationServiceTest` | Notification mapping and skipping duplicates |
@@ -308,7 +334,6 @@ and builds the Docker images.
 ## Roadmap
 
 - [ ] Real fraud-check logic
-- [ ] Distributed tracing (Micrometer Tracing + Zipkin)
 - [ ] Centralized configuration (Spring Cloud Config)
 - [ ] Kubernetes deployment
 - [x] Unit and integration tests (Testcontainers)
@@ -321,6 +346,7 @@ and builds the Docker images.
 - [x] Transactional Outbox for reliable event publishing
 - [x] Retries, Dead Letter Queue and idempotent consumer
 - [x] Unique customer email with `409 Conflict`
+- [x] Distributed tracing (Micrometer Tracing + Zipkin) and Actuator health checks
 
 ## Author
 

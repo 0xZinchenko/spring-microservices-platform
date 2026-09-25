@@ -15,12 +15,11 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: true
-  zipkin:
-    base-url: http://localhost:9411
   rabbitmq:
     addresses: localhost:5672
     listener:
       simple:
+        observation-enabled: true
         default-requeue-rejected: false
         retry:
           enabled: true
@@ -47,3 +46,18 @@ rabbitmq:
     notification-dead-letter: notification.queue.dlq
   routing-keys:
     internal-notification: internal.notification.routing-key
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_URL:http://localhost:9411/api/v2/spans}

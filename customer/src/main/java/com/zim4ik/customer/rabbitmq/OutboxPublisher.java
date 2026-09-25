@@ -1,11 +1,19 @@
 package com.zim4ik.customer.rabbitmq;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zim4ik.customer.entity.OutboxEvent;
 import com.zim4ik.customer.repository.OutboxEventRepository;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.propagation.Propagator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,6 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Component
@@ -26,6 +38,9 @@ public class OutboxPublisher {
 
     private final OutboxEventRepository outboxEventRepository;
     private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
+    private final Tracer tracer;
+    private final Propagator propagator;
 
     @Value("${outbox.publisher.batch-size:100}")
     private int batchSize;
@@ -35,16 +50,23 @@ public class OutboxPublisher {
     public void publishPending() {
         List<OutboxEvent> events = outboxEventRepository.lockUnpublished(batchSize);
         for (OutboxEvent event : events) {
-            try {
+            Span span = propagator.extract(traceHeaders(event), Map::get)
+                    .name("outbox publish")
+                    .tag("outbox.event.id", String.valueOf(event.getId()))
+                    .start();
+            try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
                 send(event);
                 event.setPublishedAt(LocalDateTime.now());
                 log.info("📤 Published outbox event {} to {}", event.getId(), event.getExchange());
             } catch (RuntimeException e) {
+                span.error(e);
                 event.setAttempts(event.getAttempts() + 1);
                 event.setLastError(truncate(String.valueOf(e.getMessage())));
                 log.warn("⚠️ Failed to publish outbox event {} (attempt {}): {}",
                         event.getId(), event.getAttempts(), e.getMessage());
                 break;
+            } finally {
+                span.end();
             }
         }
     }
@@ -57,11 +79,39 @@ public class OutboxPublisher {
         properties.setHeader("__TypeId__", event.getPayloadType());
         Message message = new Message(event.getPayload().getBytes(StandardCharsets.UTF_8), properties);
 
-        rabbitTemplate.invoke(operations -> {
-            operations.send(event.getExchange(), event.getRoutingKey(), message);
-            operations.waitForConfirmsOrDie(CONFIRM_TIMEOUT_MS);
-            return null;
-        });
+        CorrelationData correlationData = new CorrelationData(properties.getMessageId());
+        rabbitTemplate.send(event.getExchange(), event.getRoutingKey(), message, correlationData);
+
+        CorrelationData.Confirm confirm = awaitConfirm(correlationData);
+        if (!confirm.isAck()) {
+            throw new AmqpException("Broker rejected message: " + confirm.getReason());
+        }
+        if (correlationData.getReturned() != null) {
+            throw new AmqpException("Message is unroutable: " + correlationData.getReturned().getReplyText());
+        }
+    }
+
+    private CorrelationData.Confirm awaitConfirm(CorrelationData correlationData) {
+        try {
+            return correlationData.getFuture().get(CONFIRM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AmqpException("Interrupted while waiting for publisher confirm", e);
+        } catch (ExecutionException | TimeoutException e) {
+            throw new AmqpException("No publisher confirm received", e);
+        }
+    }
+
+    private Map<String, String> traceHeaders(OutboxEvent event) {
+        if (event.getTraceHeaders() == null) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(event.getTraceHeaders(), new TypeReference<>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("Ignoring unreadable trace headers of outbox event {}", event.getId());
+            return Map.of();
+        }
     }
 
     private String truncate(String error) {

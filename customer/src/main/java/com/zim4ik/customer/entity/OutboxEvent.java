@@ -41,4 +41,7 @@ public class OutboxEvent {
     private int attempts;
 
     private String lastError;
+
+    @Column(columnDefinition = "text")
+    private String traceHeaders;
 }
