@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/0xZinchenko/spring-microservices-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/0xZinchenko/spring-microservices-platform/actions/workflows/ci.yml)
 
-A learning project that shows a microservice architecture built with **Spring Boot 4** and **Spring Cloud**:
-service discovery, an API gateway, synchronous calls through OpenFeign and asynchronous messaging over RabbitMQ.
+Event-driven microservices on **Spring Boot 4** and **Spring Cloud** with reliable messaging
+(transactional outbox, DLQ, idempotent consumers), circuit breakers, distributed tracing and Testcontainers tests.
 
 When a customer registers, the `customer` service:
 1. validates the request, checks that the email is not taken and saves the customer to its own PostgreSQL database;
