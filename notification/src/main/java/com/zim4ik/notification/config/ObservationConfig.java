@@ -1,4 +1,4 @@
-package com.zim4ik.customer.config;
+package com.zim4ik.notification.config;
 
 import io.micrometer.observation.ObservationPredicate;
 import org.springframework.context.annotation.Bean;
@@ -7,11 +7,6 @@ import org.springframework.http.server.observation.ServerRequestObservationConte
 
 @Configuration
 public class ObservationConfig {
-
-    @Bean
-    public ObservationPredicate skipScheduledTaskObservations() {
-        return (name, context) -> !name.startsWith("tasks.scheduled");
-    }
 
     @Bean
     public ObservationPredicate skipActuatorObservations() {

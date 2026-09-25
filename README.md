@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/0xZinchenko/spring-microservices-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/0xZinchenko/spring-microservices-platform/actions/workflows/ci.yml)
 
-A learning project that shows a microservice architecture built with **Spring Boot 3** and **Spring Cloud**:
+A learning project that shows a microservice architecture built with **Spring Boot 4** and **Spring Cloud**:
 service discovery, an API gateway, synchronous calls through OpenFeign and asynchronous messaging over RabbitMQ.
 
 When a customer registers, the `customer` service:
@@ -88,6 +88,7 @@ gateway       SERVER    POST /api/v1/customers
 
 - Open **Zipkin** at http://localhost:9411 and click *Run query* to see traces.
 - Log lines contain `[service,traceId,spanId]`, so logs of one request can be found across services.
+- Requests to `/actuator/**` (for example, Docker healthchecks) are not traced, so Zipkin only shows real traffic.
 - The outbox stores the trace context (`traceparent` header) together with the event, and the publisher
   restores it. That is why the RabbitMQ part stays in the same trace, even though it is sent later by a
   scheduled job.
@@ -99,7 +100,7 @@ gateway       SERVER    POST /api/v1/customers
 | Area | Technology |
 |---|---|
 | Language | Java 17 |
-| Framework | Spring Boot 3.5.16, Spring Cloud 2025.0.3 |
+| Framework | Spring Boot 4.0.8, Spring Cloud 2025.1.3 |
 | Service discovery | Spring Cloud Netflix Eureka |
 | API gateway | Spring Cloud Gateway |
 | Inter-service calls | Spring Cloud OpenFeign |
@@ -109,7 +110,7 @@ gateway       SERVER    POST /api/v1/customers
 | Persistence | PostgreSQL, Spring Data JPA / Hibernate |
 | Database migrations | Flyway |
 | Validation | Jakarta Bean Validation |
-| Testing | JUnit 5, Mockito, AssertJ, Spring MockMvc, Testcontainers |
+| Testing | JUnit 5, Mockito, AssertJ, Spring MockMvc, Testcontainers 2 |
 | Build | Maven (multi-module) |
 | Infrastructure | Docker (multi-stage build), Docker Compose |
 | Other | Lombok |

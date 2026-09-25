@@ -1,21 +1,16 @@
-package com.zim4ik.customer.config;
+package com.zim4ik.gateway.config;
 
 import io.micrometer.observation.ObservationPredicate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.server.observation.ServerRequestObservationContext;
+import org.springframework.http.server.reactive.observation.ServerRequestObservationContext;
 
 @Configuration
 public class ObservationConfig {
 
     @Bean
-    public ObservationPredicate skipScheduledTaskObservations() {
-        return (name, context) -> !name.startsWith("tasks.scheduled");
-    }
-
-    @Bean
     public ObservationPredicate skipActuatorObservations() {
         return (name, context) -> !(context instanceof ServerRequestObservationContext serverContext
-                && serverContext.getCarrier().getRequestURI().startsWith("/actuator"));
+                && serverContext.getCarrier().getPath().value().startsWith("/actuator"));
     }
 }

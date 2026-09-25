@@ -1,8 +1,5 @@
 package com.zim4ik.customer.rabbitmq;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zim4ik.customer.entity.OutboxEvent;
 import com.zim4ik.customer.repository.OutboxEventRepository;
 import io.micrometer.tracing.Span;
@@ -19,6 +16,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -83,8 +83,8 @@ public class OutboxPublisher {
         rabbitTemplate.send(event.getExchange(), event.getRoutingKey(), message, correlationData);
 
         CorrelationData.Confirm confirm = awaitConfirm(correlationData);
-        if (!confirm.isAck()) {
-            throw new AmqpException("Broker rejected message: " + confirm.getReason());
+        if (!confirm.ack()) {
+            throw new AmqpException("Broker rejected message: " + confirm.reason());
         }
         if (correlationData.getReturned() != null) {
             throw new AmqpException("Message is unroutable: " + correlationData.getReturned().getReplyText());
@@ -108,7 +108,7 @@ public class OutboxPublisher {
         }
         try {
             return objectMapper.readValue(event.getTraceHeaders(), new TypeReference<>() {});
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Ignoring unreadable trace headers of outbox event {}", event.getId());
             return Map.of();
         }

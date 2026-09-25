@@ -23,15 +23,15 @@ import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
+import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfigureTracing;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 import java.time.Duration;
 
@@ -43,12 +43,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@AutoConfigureObservability(metrics = false)
+@AutoConfigureTracing
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
         "outbox.publisher.fixed-delay=200",
-        "management.zipkin.tracing.export.enabled=false"
+        "management.tracing.export.zipkin.enabled=false"
 })
 class CustomerRegistrationIntegrationTest {
 
@@ -58,7 +58,7 @@ class CustomerRegistrationIntegrationTest {
             new CustomerRegistrationRequest("Yan", "Zinchenko", "yan@example.com");
 
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @ServiceConnection
     static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3.12-management");
@@ -145,7 +145,7 @@ class CustomerRegistrationIntegrationTest {
         Customer customer = customerService.registerCustomer(REQUEST);
 
         assertThat(customerRepository.existsById(customer.getId())).isTrue();
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+        await().dontCatchUncaughtExceptions().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
                 assertThat(outboxEventRepository.findAll())
                         .singleElement()
                         .satisfies(event -> {
@@ -158,7 +158,7 @@ class CustomerRegistrationIntegrationTest {
 
         assertThat(receiveNotification()).isEqualTo(
                 new NotificationRequest(customer.getId(), "yan@example.com", "Welcome, Yan!"));
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+        await().dontCatchUncaughtExceptions().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
                 assertThat(outboxEventRepository.countByPublishedAtIsNull()).isZero());
     }
 

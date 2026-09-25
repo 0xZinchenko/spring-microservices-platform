@@ -1,6 +1,5 @@
 package com.zim4ik.customer.rabbitmq;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zim4ik.customer.entity.OutboxEvent;
 import com.zim4ik.customer.repository.OutboxEventRepository;
 import io.micrometer.tracing.Tracer;
@@ -16,6 +15,7 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -46,7 +46,7 @@ class OutboxPublisherTest {
     @BeforeEach
     void setUp() {
         outboxPublisher = new OutboxPublisher(
-                outboxEventRepository, rabbitTemplate, new ObjectMapper(), Tracer.NOOP, Propagator.NOOP);
+                outboxEventRepository, rabbitTemplate, JsonMapper.builder().build(), Tracer.NOOP, Propagator.NOOP);
         ReflectionTestUtils.setField(outboxPublisher, "batchSize", 100);
     }
 

@@ -11,8 +11,8 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -33,7 +33,7 @@ class NotificationConsumerIntegrationTest {
     private static final String DEAD_LETTER_QUEUE = "notification.queue.dlq";
 
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @ServiceConnection
     static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3.12-management");

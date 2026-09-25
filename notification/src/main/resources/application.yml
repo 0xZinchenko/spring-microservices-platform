@@ -22,7 +22,7 @@ spring:
         default-requeue-rejected: false
         retry:
           enabled: true
-          max-attempts: 3
+          max-retries: 2
           initial-interval: 1s
           multiplier: 2
           max-interval: 10s
@@ -57,6 +57,6 @@ management:
   tracing:
     sampling:
       probability: 1.0
-  zipkin:
-    tracing:
-      endpoint: ${ZIPKIN_URL:http://localhost:9411/api/v2/spans}
+    export:
+      zipkin:
+        endpoint: ${ZIPKIN_URL:http://localhost:9411/api/v2/spans}

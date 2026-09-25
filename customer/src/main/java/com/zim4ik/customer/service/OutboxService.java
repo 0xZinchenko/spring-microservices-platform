@@ -1,7 +1,5 @@
 package com.zim4ik.customer.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zim4ik.customer.entity.OutboxEvent;
 import com.zim4ik.customer.repository.OutboxEventRepository;
 import io.micrometer.tracing.TraceContext;
@@ -11,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -50,7 +50,7 @@ public class OutboxService {
     private String toJson(Object payload) {
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("Cannot serialize outbox payload " + payload.getClass().getName(), e);
         }
     }
