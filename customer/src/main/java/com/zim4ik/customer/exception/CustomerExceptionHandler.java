@@ -28,6 +28,11 @@ public class CustomerExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(CustomerAlreadyExistsException.class)
+    public ProblemDetail handleAlreadyExists(CustomerAlreadyExistsException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
     @ExceptionHandler(CustomerFraudException.class)
     public ProblemDetail handleFraud(CustomerFraudException e) {
         log.warn(e.getMessage());

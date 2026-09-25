@@ -6,7 +6,7 @@ A learning project that shows a microservice architecture built with **Spring Bo
 service discovery, an API gateway, synchronous calls through OpenFeign and asynchronous messaging over RabbitMQ.
 
 When a customer registers, the `customer` service:
-1. validates the request and saves the customer to its own PostgreSQL database;
+1. validates the request, checks that the email is not taken and saves the customer to its own PostgreSQL database;
 2. calls `fraud` **synchronously** (OpenFeign, resolved through Eureka, protected by a circuit breaker);
 3. if the check fails or `fraud` is unavailable, the whole registration is **rolled back**;
 4. stores a notification event in the `outbox_event` table **in the same transaction** as the customer;
@@ -235,6 +235,7 @@ Possible error responses (in [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) 
 |---|---|
 | `400 Bad Request` | Validation failed; the `errors` field lists the invalid fields |
 | `403 Forbidden` | The customer did not pass the fraud check |
+| `409 Conflict` | A customer with this email already exists (emails are compared case-insensitively) |
 | `503 Service Unavailable` | `fraud` is down, too slow, or the circuit breaker is open |
 
 ```json
@@ -288,8 +289,8 @@ and builds the Docker images.
 | Service | Test | What it checks |
 |---|---|---|
 | customer | `CustomerServiceTest` | Registration logic with mocked dependencies |
-| customer | `CustomerControllerTest` | HTTP statuses `201`, `400`, `403`, `503` and error bodies |
-| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message, rollback when the customer is a fraudster or `fraud` fails |
+| customer | `CustomerControllerTest` | HTTP statuses `201`, `400`, `403`, `409`, `503` and error bodies |
+| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message, rollback when the customer is a fraudster or `fraud` fails, duplicate email rejected |
 | customer | `OutboxPublisherTest` | Message format, marking events as published, recording failed attempts |
 | fraud | `FraudCheckServiceTest` | Fraud check result and history record |
 | fraud | `FraudCheckIntegrationTest` | Endpoint and Flyway schema on Postgres |
@@ -319,6 +320,7 @@ and builds the Docker images.
 - [x] Transactional registration: no customer is saved if the fraud check fails
 - [x] Transactional Outbox for reliable event publishing
 - [x] Retries, Dead Letter Queue and idempotent consumer
+- [x] Unique customer email with `409 Conflict`
 
 ## Author
 

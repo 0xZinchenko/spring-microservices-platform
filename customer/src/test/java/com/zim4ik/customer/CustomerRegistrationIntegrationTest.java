@@ -6,6 +6,7 @@ import com.zim4ik.clients.notification.NotificationRequest;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
 import com.zim4ik.customer.entity.Customer;
 import com.zim4ik.customer.entity.OutboxEvent;
+import com.zim4ik.customer.exception.CustomerAlreadyExistsException;
 import com.zim4ik.customer.exception.CustomerFraudException;
 import com.zim4ik.customer.repository.CustomerRepository;
 import com.zim4ik.customer.repository.OutboxEventRepository;
@@ -27,8 +28,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.ParameterizedTypeReference;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
 
@@ -36,9 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@Testcontainers
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
@@ -51,13 +51,16 @@ class CustomerRegistrationIntegrationTest {
     private static final CustomerRegistrationRequest REQUEST =
             new CustomerRegistrationRequest("Yan", "Zinchenko", "yan@example.com");
 
-    @Container
     @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
-    @Container
     @ServiceConnection
     static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3.12-management");
+
+    static {
+        postgres.start();
+        rabbitmq.start();
+    }
 
     @TestConfiguration
     static class TestQueueConfig {
@@ -169,6 +172,20 @@ class CustomerRegistrationIntegrationTest {
         assertThat(customerRepository.count()).isZero();
         assertThat(outboxEventRepository.count()).isZero();
         assertThat(rabbitTemplate.receive(TEST_QUEUE, 1000)).isNull();
+    }
+
+    @Test
+    void registerCustomer_rejectsSecondRegistration_withSameEmailInDifferentCase() {
+        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        customerService.registerCustomer(REQUEST);
+
+        assertThatThrownBy(() -> customerService.registerCustomer(
+                new CustomerRegistrationRequest("Other", "Person", "YAN@example.com")))
+                .isInstanceOf(CustomerAlreadyExistsException.class);
+
+        assertThat(customerRepository.count()).isEqualTo(1);
+        assertThat(outboxEventRepository.count()).isEqualTo(1);
+        verify(fraudClient, times(1)).isFraudster(anyInt());
     }
 
     private NotificationRequest receiveNotification() {

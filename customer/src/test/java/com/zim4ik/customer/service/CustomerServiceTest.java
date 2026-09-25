@@ -5,6 +5,7 @@ import com.zim4ik.clients.fraud.FraudClient;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
 import com.zim4ik.customer.entity.Customer;
 import com.zim4ik.customer.event.CustomerRegisteredEvent;
+import com.zim4ik.customer.exception.CustomerAlreadyExistsException;
 import com.zim4ik.customer.exception.CustomerFraudException;
 import com.zim4ik.customer.repository.CustomerRepository;
 import org.junit.jupiter.api.Test;
@@ -14,11 +15,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -90,5 +94,45 @@ class CustomerServiceTest {
                 .isInstanceOf(IllegalStateException.class);
 
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void registerCustomer_normalizesEmail() {
+        when(customerRepository.saveAndFlush(any(Customer.class))).thenAnswer(invocation -> {
+            Customer customer = invocation.getArgument(0);
+            customer.setId(4);
+            return customer;
+        });
+        when(fraudClient.isFraudster(4)).thenReturn(new FraudCheckResponse(false));
+
+        Customer customer = customerService.registerCustomer(
+                new CustomerRegistrationRequest("Yan", "Zinchenko", "  Yan@Example.COM "));
+
+        assertThat(customer.getEmail()).isEqualTo("yan@example.com");
+        verify(customerRepository).existsByEmail("yan@example.com");
+    }
+
+    @Test
+    void registerCustomer_throwsWithoutCallingFraud_whenEmailAlreadyExists() {
+        when(customerRepository.existsByEmail("yan@example.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> customerService.registerCustomer(REQUEST))
+                .isInstanceOf(CustomerAlreadyExistsException.class)
+                .hasMessageContaining("yan@example.com");
+
+        verify(customerRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(fraudClient, eventPublisher);
+    }
+
+    @Test
+    void registerCustomer_throwsAlreadyExists_whenUniqueConstraintIsViolated() {
+        when(customerRepository.saveAndFlush(any(Customer.class)))
+                .thenThrow(new DataIntegrityViolationException("uq_customer_email"));
+
+        assertThatThrownBy(() -> customerService.registerCustomer(REQUEST))
+                .isInstanceOf(CustomerAlreadyExistsException.class);
+
+        verify(fraudClient, never()).isFraudster(anyInt());
+        verifyNoInteractions(eventPublisher);
     }
 }

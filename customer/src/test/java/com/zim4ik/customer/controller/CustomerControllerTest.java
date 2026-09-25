@@ -4,6 +4,7 @@ import com.zim4ik.clients.fraud.FraudClient;
 import com.zim4ik.clients.notification.NotificationClient;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
 import com.zim4ik.customer.entity.Customer;
+import com.zim4ik.customer.exception.CustomerAlreadyExistsException;
 import com.zim4ik.customer.exception.CustomerFraudException;
 import com.zim4ik.customer.service.CustomerService;
 import org.junit.jupiter.api.Test;
@@ -84,5 +85,15 @@ class CustomerControllerTest {
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
+    void register_returns409_whenEmailAlreadyExists() throws Exception {
+        when(customerService.registerCustomer(any(CustomerRegistrationRequest.class)))
+                .thenThrow(new CustomerAlreadyExistsException("yan@example.com"));
+
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
     }
 }
