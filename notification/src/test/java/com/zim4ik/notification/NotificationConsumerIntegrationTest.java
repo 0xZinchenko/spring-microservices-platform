@@ -36,7 +36,7 @@ class NotificationConsumerIntegrationTest {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18-alpine");
 
     @ServiceConnection
-    static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3.12-management");
+    static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:4.3-management");
 
     static {
         postgres.start();

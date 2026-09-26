@@ -106,7 +106,7 @@ gateway       SERVER    POST /api/v1/customers
 | Inter-service calls | Spring Cloud OpenFeign |
 | Fault tolerance | Resilience4j (circuit breaker, time limiter) |
 | Observability | Spring Boot Actuator, Micrometer Tracing (Brave), Zipkin |
-| Messaging | RabbitMQ 3.12 (Spring AMQP) |
+| Messaging | RabbitMQ 4.3 (Spring AMQP) |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate |
 | Database migrations | Flyway |
 | Validation | Jakarta Bean Validation |
