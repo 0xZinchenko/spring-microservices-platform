@@ -205,6 +205,7 @@ All counters are registered with `0` at startup, so Prometheus sees the first in
 | `fraud` | Fraud check, stores check history | 8081 |
 | `notification` | Consumes events from RabbitMQ, stores notifications | 8082 |
 | `clients` | Shared library: Feign clients and DTOs (not a runnable service) | — |
+| `coverage-report` | Aggregates JaCoCo test coverage of all modules (not a runnable service) | — |
 
 Infrastructure (from `docker-compose.yml`):
 
@@ -479,6 +480,17 @@ Docker must be running: integration tests start real PostgreSQL and RabbitMQ con
 On every push and pull request to `main`, [GitHub Actions](.github/workflows/ci.yml) runs the tests
 and builds the Docker images.
 
+Test coverage is measured with JaCoCo. `mvn verify` fails if line coverage of `customer`, `fraud` or
+`notification` drops below **85%**, and writes a combined report for all modules:
+
+```bash
+mvn verify
+open coverage-report/target/site/jacoco-aggregate/index.html
+```
+
+Current coverage: **~90% of lines**. In CI, the coverage table is shown in the run summary and the HTML
+report is attached to the run as the `coverage-report` artifact.
+
 | Service | Test | What it checks |
 |---|---|---|
 | customer | `CustomerServiceTest` | Registration logic with mocked dependencies |
@@ -503,7 +515,7 @@ and builds the Docker images.
 - [ ] Centralized configuration (Spring Cloud Config)
 - [ ] Kubernetes deployment
 - [x] Metrics with Prometheus and Grafana dashboards
-- [x] Unit and integration tests (Testcontainers)
+- [x] Unit and integration tests (Testcontainers) with a JaCoCo coverage gate
 - [x] Dockerfile for every service and the full stack in Docker Compose
 - [x] Database migrations (Flyway) instead of `create-drop`
 - [x] Service discovery for Feign clients through Eureka

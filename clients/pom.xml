@@ -9,6 +9,10 @@
 
     <artifactId>clients</artifactId>
 
+    <properties>
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.github.openfeign</groupId>

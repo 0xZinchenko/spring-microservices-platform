@@ -12,6 +12,7 @@
     <name>eureka-server</name>
 
     <properties>
+        <jacoco.skip>true</jacoco.skip>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
