@@ -58,7 +58,7 @@ class CustomerRegistrationIntegrationTest {
             new CustomerRegistrationRequest("Yan", "Zinchenko", "yan@example.com");
 
     @ServiceConnection
-    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18-alpine");
 
     @ServiceConnection
     static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3.12-management");
