@@ -4,11 +4,14 @@ WORKDIR /build
 COPY . .
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -q package -pl ${MODULE} -am -DskipTests \
-    && cp ${MODULE}/target/${MODULE}-*.jar /build/app.jar
+    && java -Djarmode=tools -jar ${MODULE}/target/${MODULE}-*.jar extract --layers --launcher --destination extracted
 
-FROM eclipse-temurin:17-jre
-RUN useradd --system --create-home spring
+FROM bellsoft/liberica-openjre-alpine:17
+RUN addgroup -S spring && adduser -S spring -G spring
 USER spring
 WORKDIR /app
-COPY --from=build /build/app.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+COPY --from=build /build/extracted/dependencies/ ./
+COPY --from=build /build/extracted/spring-boot-loader/ ./
+COPY --from=build /build/extracted/snapshot-dependencies/ ./
+COPY --from=build /build/extracted/application/ ./
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

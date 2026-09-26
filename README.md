@@ -214,7 +214,9 @@ docker compose --profile app up -d --build
 ```
 
 This builds an image for each service from the shared multi-stage [`Dockerfile`](Dockerfile)
-and starts them together with PostgreSQL and RabbitMQ. Services wait for Postgres, RabbitMQ and
+and starts them together with PostgreSQL and RabbitMQ. Images run on a small Alpine-based Java 17
+runtime (BellSoft Liberica, amd64 and arm64) as a non-root user, and the Spring Boot jar is split into
+layers, so a code change only rebuilds the small application layer. Services wait for Postgres, RabbitMQ and
 Eureka to become healthy before starting. Give them ~30 seconds after startup to discover each other
 through Eureka; until then registration may return `503`.
 
