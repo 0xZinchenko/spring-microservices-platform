@@ -116,8 +116,10 @@ gateway       SERVER    POST /api/v1/customers
 - The outbox stores the trace context (`traceparent` header) together with the event, and the publisher
   restores it. That is why the RabbitMQ part stays in the same trace, even though it is sent later by a
   scheduled job.
-- Each service exposes `GET /actuator/health` (database, RabbitMQ, discovery) and `GET /actuator/info`.
-  Docker Compose uses the health endpoint for container healthchecks.
+- Each service exposes `GET /actuator/health` and `GET /actuator/info`. Docker Compose uses the health
+  endpoint for container healthchecks. The overall status still includes the database, RabbitMQ and
+  discovery checks, but their details are hidden. To see them while debugging, start a service with
+  `MANAGEMENT_ENDPOINT_HEALTH_SHOWDETAILS=always`.
 
 ## Tech stack
 
