@@ -5,6 +5,58 @@
 Event-driven microservices on **Spring Boot 4** and **Spring Cloud** with reliable messaging
 (transactional outbox, DLQ, idempotent consumers), circuit breakers, distributed tracing and Testcontainers tests.
 
+**Contents:** [Architecture](#architecture) · [How it works](#how-it-works) · [Observability](#observability) ·
+[Metrics and dashboards](#metrics-and-dashboards) · [Getting started](#getting-started) ·
+[Demo walkthrough](#demo-walkthrough) · [API](#api) · [Tests](#tests) · [Roadmap](#roadmap)
+
+## Architecture
+
+Registration flow:
+
+```mermaid
+flowchart LR
+    client([Client]) -->|"HTTP :8222"| gateway[API Gateway]
+    gateway -->|"lb://customer"| customer[Customer :8080]
+    customer -->|"POST /api/v1/fraud-check<br/>OpenFeign + circuit breaker"| fraud[Fraud :8081]
+    customer -->|"customer + outbox event<br/>in one transaction"| dbC[("PostgreSQL: customer<br/>customer, outbox_event")]
+    dbC -->|"OutboxPublisher<br/>publisher confirms"| exchange{{"RabbitMQ<br/>internal.exchange"}}
+    exchange --> queue[["notification.queue"]]
+    queue --> notification[Notification :8082]
+    queue -. "after 3 failed attempts" .-> dlq[["notification.queue.dlq"]]
+    fraud --- dbF[("PostgreSQL: fraud<br/>history, blocklists")]
+    notification --- dbN[("PostgreSQL: notification")]
+```
+
+Service discovery and observability:
+
+```mermaid
+flowchart LR
+    services["gateway, customer,<br/>fraud, notification"]
+    eureka{{"Eureka Server :8761"}}
+    zipkin["Zipkin :9411"]
+    prometheus["Prometheus :9090"]
+    grafana["Grafana :3000"]
+    rabbitmq["RabbitMQ"]
+
+    services -. "register / discover" .-> eureka
+    services -- "trace spans" --> zipkin
+    prometheus -- "find targets" --> eureka
+    prometheus -- "scrape /actuator/prometheus" --> services
+    prometheus -- "scrape queue metrics" --> rabbitmq
+    grafana -- "PromQL" --> prometheus
+```
+
+<details>
+<summary>Target architecture (reference, 2026-06-01)</summary>
+
+The diagram below shows where the project is heading. Parts of it are not implemented yet
+(MongoDB, Kafka, Config Server, Docker registry). See [Roadmap](#roadmap).
+
+![Target architecture, 2026-06-01](https://user-images.githubusercontent.com/40702606/144061535-7a42e85b-59d6-4f7f-9c35-18a48b49e6de.png)
+</details>
+
+## How it works
+
 When a customer registers, the `customer` service:
 1. validates the request, checks that the email is not taken and saves the customer to its own PostgreSQL database;
 2. calls `fraud` **synchronously** (OpenFeign, resolved through Eureka, protected by a circuit breaker)
@@ -65,36 +117,6 @@ INSERT INTO blocked_email_domain (domain) VALUES ('spam-domain.com');
   redelivered forever. Messages in the DLQ can be inspected in the RabbitMQ UI.
 - The consumer is **idempotent**: the `messageId` is stored as `source_message_id`, so a message that
   is delivered twice is skipped. A unique index on that column guards against concurrent duplicates.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    client([Client]) -->|HTTP :8222| gateway[API Gateway]
-    gateway -->|lb://customer| customer[Customer :8080]
-    customer -->|OpenFeign, sync| fraud[Fraud :8081]
-    customer -->|publish event| mq[(RabbitMQ<br/>internal.exchange)]
-    mq -->|notification.queue| notification[Notification :8082]
-
-    customer --- dbC[(PostgreSQL<br/>customer)]
-    fraud --- dbF[(PostgreSQL<br/>fraud)]
-    notification --- dbN[(PostgreSQL<br/>notification)]
-
-    eureka{{Eureka Server :8761}}
-    gateway -.register / discover.- eureka
-    customer -.register.- eureka
-    fraud -.register.- eureka
-    notification -.register.- eureka
-```
-
-<details>
-<summary>Target architecture (reference, 2026-06-01)</summary>
-
-The diagram below shows where the project is heading. Parts of it are not implemented yet
-(MongoDB, Kafka, Config Server, Docker registry). See [Roadmap](#roadmap).
-
-![Target architecture, 2026-06-01](https://user-images.githubusercontent.com/40702606/144061535-7a42e85b-59d6-4f7f-9c35-18a48b49e6de.png)
-</details>
 
 ## Observability
 
@@ -361,15 +383,73 @@ curl -X POST http://localhost:8081/api/v1/fraud-check \
 
 Try the `403` through the gateway with a disposable email, for example `spam@mailinator.com`.
 
-### How to verify the flow
+## Demo walkthrough
 
-- **Eureka dashboard** (http://localhost:8761): `CUSTOMER`, `FRAUD`, `NOTIFICATION` and `GATEWAY` are registered.
-- **RabbitMQ UI** (http://localhost:15672): the `notification.queue` queue is bound to `internal.exchange`.
-- **pgAdmin** (http://localhost:5050):
-  - `customer` database has the new customer;
-  - `fraud` database has a row in `fraud_check_history`;
-  - `notification` database has a welcome notification.
-- **Logs**: `customer` prints `Notification event sent`, `notification` prints `Received from queue`.
+A 10-minute tour of every feature. Start everything first:
+
+```bash
+cp .env.example .env                        # once
+docker compose --profile app up -d --build
+docker compose --profile app ps             # wait until services are (healthy)
+```
+
+Give the services ~30 seconds to find each other through Eureka (http://localhost:8761).
+
+**1. Register customers and see every response** (or use Swagger UI: http://localhost:8080/swagger-ui.html)
+
+```bash
+URL=localhost:8222/api/v1/customers; H="Content-Type: application/json"
+curl -i -X POST $URL -H "$H" -d '{"firstName":"Yan","lastName":"Zinchenko","email":"yan@example.com"}'   # 201
+curl -i -X POST $URL -H "$H" -d '{"firstName":"Yan","lastName":"Z","email":"YAN@example.com"}'          # 409 duplicate
+curl -i -X POST $URL -H "$H" -d '{"firstName":"Spam","lastName":"Bot","email":"spam@mailinator.com"}'   # 403 fraud
+curl -i -X POST $URL -H "$H" -d '{"firstName":"","lastName":"Z","email":"bad"}'                         # 400 invalid
+```
+
+**2. Look at the data** (`POSTGRES_USER` from `.env`)
+
+```bash
+docker exec postgres psql -U zim4ik -d customer     -c "select id, email from customer"
+docker exec postgres psql -U zim4ik -d customer     -c "select id, published_at, attempts from outbox_event"
+docker exec postgres psql -U zim4ik -d fraud        -c "select customer_id, is_fraudster, reason from fraud_check_history"
+docker exec postgres psql -U zim4ik -d notification -c "select to_customer_email, message from notification"
+```
+
+Only the successful registration is stored; the fraud history keeps every check with its reason.
+
+**3. Follow a request** in Zipkin (http://localhost:9411 → *Run query*): gateway → customer → fraud →
+outbox → RabbitMQ → notification in one trace.
+
+**4. Watch the metrics** in Grafana (http://localhost:3000): send a few more requests and check
+*Registrations by result* and *Fraud checks by result*.
+
+**5. Break the fraud service**
+
+```bash
+docker stop fraud
+# send 6-8 registrations with different emails -> 503
+docker start fraud
+```
+
+Registrations return `503` and nothing is saved. In Grafana, *Fraud circuit breaker* turns **OPEN**
+and *Registrations by result* shows `fraud_unavailable`.
+
+**6. Break RabbitMQ**
+
+```bash
+docker stop rabbitmq
+curl -i -X POST $URL -H "$H" -d '{"firstName":"Anna","lastName":"K","email":"anna@example.com"}'        # still 201
+docker exec postgres psql -U zim4ik -d customer -c "select id, published_at, attempts, last_error from outbox_event order by id desc limit 1"
+docker start rabbitmq
+```
+
+The event waits in the outbox (`published_at` is empty, `attempts` grows, *Outbox pending* > 0 in Grafana).
+After RabbitMQ is back, it is delivered and Anna's notification appears. Nothing is lost.
+
+**7. Clean up**
+
+```bash
+docker compose --profile app down -v
+```
 
 ## API
 
