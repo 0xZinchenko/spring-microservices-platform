@@ -27,9 +27,11 @@ import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfig
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 
@@ -42,8 +44,12 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @AutoConfigureTracing
+@AutoConfigureMockMvc
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
@@ -104,6 +110,9 @@ class CustomerRegistrationIntegrationTest {
 
     @Autowired
     private Binding testNotificationBinding;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @MockitoBean
     private FraudClient fraudClient;
@@ -237,6 +246,19 @@ class CustomerRegistrationIntegrationTest {
         assertThat(message).isNotNull();
         assertThat(message.getMessageProperties().<String>getHeader("traceparent"))
                 .contains(requestSpan.context().traceId());
+    }
+
+    @Test
+    void apiDocs_describeRegistrationEndpointWithAllResponses() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("Customer API"))
+                .andExpect(jsonPath("$.paths['/api/v1/customers'].post.summary").value("Register a customer"))
+                .andExpect(jsonPath("$.paths['/api/v1/customers'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/customers'].post.responses['400']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/customers'].post.responses['403']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/customers'].post.responses['409']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/customers'].post.responses['503']").exists());
     }
 
     private NotificationRequest receiveNotification() {

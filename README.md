@@ -113,6 +113,7 @@ gateway       SERVER    POST /api/v1/customers
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate |
 | Database migrations | Flyway |
 | Validation | Jakarta Bean Validation |
+| API documentation | springdoc-openapi (Swagger UI) |
 | Testing | JUnit 5, Mockito, AssertJ, Spring MockMvc, Testcontainers 2 |
 | Build | Maven (multi-module) |
 | Infrastructure | Docker (multi-stage build), Docker Compose |
@@ -316,6 +317,17 @@ curl http://localhost:8081/api/v1/fraud-check/1
 | `GET` | `/api/v1/fraud-check/{customerId}` | fraud | Check if a customer is a fraudster |
 | `POST` | `/api/v1/notification` | notification | Send a notification directly (sync, bypasses RabbitMQ) |
 
+Interactive documentation (Swagger UI, generated with springdoc-openapi):
+
+| Service | Swagger UI | OpenAPI spec |
+|---|---|---|
+| customer | http://localhost:8080/swagger-ui.html | http://localhost:8080/v3/api-docs |
+| fraud | http://localhost:8081/swagger-ui.html | http://localhost:8081/v3/api-docs |
+| notification | http://localhost:8082/swagger-ui.html | http://localhost:8082/v3/api-docs |
+
+In Swagger UI, open *Customers → POST /api/v1/customers → Try it out* to register a customer with
+the example request and see every possible response (`201`, `400`, `403`, `409`, `503`).
+
 ## Tests
 
 ```bash
@@ -331,7 +343,7 @@ and builds the Docker images.
 |---|---|---|
 | customer | `CustomerServiceTest` | Registration logic with mocked dependencies |
 | customer | `CustomerControllerTest` | HTTP statuses `201`, `400`, `403`, `409`, `503` and error bodies |
-| customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message or it is unroutable, trace context propagated to RabbitMQ, rollback when the customer is a fraudster or `fraud` fails, duplicate email rejected |
+| customer | `CustomerRegistrationIntegrationTest` | OpenAPI spec is generated with all responses; full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message or it is unroutable, trace context propagated to RabbitMQ, rollback when the customer is a fraudster or `fraud` fails, duplicate email rejected |
 | customer | `OutboxEventRepositoryTest` | Outbox SQL on Postgres: locking unpublished events, deleting only old published events in batches |
 | customer | `OutboxCleanupServiceTest` | Cleanup cutoff date and batch loop |
 | customer | `OutboxPublisherTest` | Message format, publisher confirms (ack / nack), recording failed attempts |
