@@ -7,10 +7,11 @@ import com.zim4ik.fraud.model.FraudReason;
 import com.zim4ik.fraud.repository.BlockedEmailDomainRepository;
 import com.zim4ik.fraud.repository.BlockedEmailRepository;
 import com.zim4ik.fraud.repository.FraudCheckHistoryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -30,8 +31,16 @@ class FraudCheckServiceTest {
     @Mock
     private BlockedEmailDomainRepository blockedEmailDomainRepository;
 
-    @InjectMocks
+    private SimpleMeterRegistry meterRegistry;
+
     private FraudCheckService fraudCheckService;
+
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        fraudCheckService = new FraudCheckService(fraudCheckHistoryRepository, blockedEmailRepository,
+                blockedEmailDomainRepository, meterRegistry);
+    }
 
     @Test
     void check_passesCleanCustomerAndSavesHistory() {
@@ -43,6 +52,7 @@ class FraudCheckServiceTest {
         assertThat(history.getIsFraudster()).isFalse();
         assertThat(history.getReason()).isNull();
         assertThat(history.getCreatedAt()).isNotNull();
+        assertThat(meterRegistry.counter("fraud.checks", "result", "clean").count()).isEqualTo(1);
     }
 
     @Test
@@ -63,6 +73,7 @@ class FraudCheckServiceTest {
 
         assertThat(response).isEqualTo(new FraudCheckResponse(true, FraudReason.DISPOSABLE_EMAIL_DOMAIN));
         assertThat(savedHistory().getIsFraudster()).isTrue();
+        assertThat(meterRegistry.counter("fraud.checks", "result", "disposable_email_domain").count()).isEqualTo(1);
     }
 
     private FraudCheckHistory savedHistory() {

@@ -2,6 +2,7 @@ package com.zim4ik.customer.rabbitmq;
 
 import com.zim4ik.customer.entity.OutboxEvent;
 import com.zim4ik.customer.repository.OutboxEventRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,12 +42,15 @@ class OutboxPublisherTest {
     @Mock
     private RabbitTemplate rabbitTemplate;
 
+    private SimpleMeterRegistry meterRegistry;
+
     private OutboxPublisher outboxPublisher;
 
     @BeforeEach
     void setUp() {
-        outboxPublisher = new OutboxPublisher(
-                outboxEventRepository, rabbitTemplate, JsonMapper.builder().build(), Tracer.NOOP, Propagator.NOOP);
+        meterRegistry = new SimpleMeterRegistry();
+        outboxPublisher = new OutboxPublisher(outboxEventRepository, rabbitTemplate,
+                JsonMapper.builder().build(), Tracer.NOOP, Propagator.NOOP, meterRegistry);
         ReflectionTestUtils.setField(outboxPublisher, "batchSize", 100);
     }
 
@@ -66,6 +70,7 @@ class OutboxPublisherTest {
         assertThat(message.getValue().getMessageProperties().<String>getHeader("__TypeId__"))
                 .isEqualTo("com.example.Payload");
         assertThat(event.getPublishedAt()).isNotNull();
+        assertThat(meterRegistry.counter("outbox.events.published").count()).isEqualTo(1);
     }
 
     @Test
@@ -79,6 +84,7 @@ class OutboxPublisherTest {
         assertThat(event.getPublishedAt()).isNull();
         assertThat(event.getAttempts()).isEqualTo(1);
         assertThat(event.getLastError()).contains("rejected");
+        assertThat(meterRegistry.counter("outbox.publish.failures").count()).isEqualTo(1);
     }
 
     @Test

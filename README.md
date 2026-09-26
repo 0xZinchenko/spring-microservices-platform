@@ -121,6 +121,37 @@ gateway       SERVER    POST /api/v1/customers
   discovery checks, but their details are hidden. To see them while debugging, start a service with
   `MANAGEMENT_ENDPOINT_HEALTH_SHOWDETAILS=always`.
 
+## Metrics and dashboards
+
+Prometheus and Grafana start with the `app` profile (`docker compose --profile app up -d --build`).
+
+- Every service exposes metrics at `/actuator/prometheus`.
+- **Prometheus finds the services through Eureka** (`eureka_sd_configs`), so a new instance is
+  scraped automatically. It also scrapes RabbitMQ queue metrics. Check targets at
+  http://localhost:9090/targets.
+- **Grafana** opens the *Microservices overview* dashboard at http://localhost:3000 without login.
+  The data source and the dashboard are provisioned from [`docker/grafana`](docker/grafana).
+
+| Row | Panels |
+|---|---|
+| Traffic | Requests per second, 5xx errors per second, p95 latency (per service) |
+| Business | Registrations by result, fraud checks by result, notifications processed |
+| Reliability | Outbox pending events, outbox publish failures, dead letter queue size, fraud circuit breaker state |
+| JVM | Heap used, CPU usage (per service) |
+
+Custom metrics:
+
+| Metric | Service | Tags |
+|---|---|---|
+| `customer_registrations_total` | customer | `result`: success, invalid, duplicate, fraud, fraud_unavailable |
+| `outbox_events_pending` | customer | — |
+| `outbox_events_published_total`, `outbox_publish_failures_total` | customer | — |
+| `fraud_checks_total` | fraud | `result`: clean, blocked_email, disposable_email_domain |
+| `notifications_processed_total` | notification | `result`: saved, duplicate |
+
+All counters are registered with `0` at startup, so Prometheus sees the first increase and panels show
+`0` instead of *No data*.
+
 ## Tech stack
 
 | Area | Technology |
@@ -131,7 +162,7 @@ gateway       SERVER    POST /api/v1/customers
 | API gateway | Spring Cloud Gateway |
 | Inter-service calls | Spring Cloud OpenFeign |
 | Fault tolerance | Resilience4j (circuit breaker, time limiter) |
-| Observability | Spring Boot Actuator, Micrometer Tracing (Brave), Zipkin |
+| Observability | Spring Boot Actuator, Micrometer Tracing (Brave), Zipkin, Prometheus, Grafana |
 | Messaging | RabbitMQ 4.3 (Spring AMQP) |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate |
 | Database migrations | Flyway |
@@ -162,6 +193,8 @@ Infrastructure (from `docker-compose.yml`):
 | RabbitMQ | `localhost:5672` | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` |
 | RabbitMQ Management UI | http://localhost:15672 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` |
 | Zipkin | http://localhost:9411 | — |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | anonymous read-only; admin: `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` |
 
 Credentials are not stored in the repository. They live in a local `.env` file (ignored by git and
 excluded from Docker images), created from [`.env.example`](.env.example).
@@ -389,6 +422,7 @@ and builds the Docker images.
 
 - [ ] Centralized configuration (Spring Cloud Config)
 - [ ] Kubernetes deployment
+- [x] Metrics with Prometheus and Grafana dashboards
 - [x] Unit and integration tests (Testcontainers)
 - [x] Dockerfile for every service and the full stack in Docker Compose
 - [x] Database migrations (Flyway) instead of `create-drop`

@@ -3,10 +3,11 @@ package com.zim4ik.notification.service;
 import com.zim4ik.clients.notification.NotificationRequest;
 import com.zim4ik.notification.entity.Notification;
 import com.zim4ik.notification.repository.NotificationRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -22,8 +23,15 @@ class NotificationServiceTest {
     @Mock
     private NotificationRepository notificationRepository;
 
-    @InjectMocks
+    private SimpleMeterRegistry meterRegistry;
+
     private NotificationService notificationService;
+
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        notificationService = new NotificationService(notificationRepository, meterRegistry);
+    }
 
     @Test
     void send_savesNotification() {
@@ -45,6 +53,7 @@ class NotificationServiceTest {
         ArgumentCaptor<Notification> notification = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(notification.capture());
         assertThat(notification.getValue().getSourceMessageId()).isEqualTo("customer-outbox-1");
+        assertThat(meterRegistry.counter("notifications.processed", "result", "saved").count()).isEqualTo(1);
     }
 
     @Test
@@ -54,5 +63,6 @@ class NotificationServiceTest {
         notificationService.send(new NotificationRequest(1, "yan@example.com", "Welcome, Yan!"), "customer-outbox-1");
 
         verify(notificationRepository, never()).save(any());
+        assertThat(meterRegistry.counter("notifications.processed", "result", "duplicate").count()).isEqualTo(1);
     }
 }

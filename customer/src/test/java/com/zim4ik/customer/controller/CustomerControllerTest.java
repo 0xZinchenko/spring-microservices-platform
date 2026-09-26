@@ -5,6 +5,7 @@ import com.zim4ik.customer.dto.CustomerRegistrationRequest;
 import com.zim4ik.customer.entity.Customer;
 import com.zim4ik.customer.exception.CustomerAlreadyExistsException;
 import com.zim4ik.customer.exception.CustomerFraudException;
+import com.zim4ik.customer.metrics.RegistrationMetrics;
 import com.zim4ik.customer.service.CustomerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,9 @@ class CustomerControllerTest {
     @MockitoBean
     private FraudClient fraudClient;
 
+    @MockitoBean
+    private RegistrationMetrics registrationMetrics;
+
     @Test
     void register_returns201WithCustomerId() throws Exception {
         when(customerService.registerCustomer(any(CustomerRegistrationRequest.class)))
@@ -48,6 +52,8 @@ class CustomerControllerTest {
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.customerId").value(7));
+
+        verify(registrationMetrics).record(RegistrationMetrics.SUCCESS);
     }
 
     @Test
@@ -61,6 +67,7 @@ class CustomerControllerTest {
                 .andExpect(jsonPath("$.errors.lastName").doesNotExist());
 
         verify(customerService, never()).registerCustomer(any());
+        verify(registrationMetrics).record(RegistrationMetrics.INVALID);
     }
 
     @Test
@@ -72,6 +79,8 @@ class CustomerControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403))
                 .andExpect(jsonPath("$.detail").value("Registration rejected by the fraud check"));
+
+        verify(registrationMetrics).record(RegistrationMetrics.FRAUD);
     }
 
     @Test
@@ -82,6 +91,8 @@ class CustomerControllerTest {
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503));
+
+        verify(registrationMetrics).record(RegistrationMetrics.FRAUD_UNAVAILABLE);
     }
 
     @Test
@@ -92,5 +103,7 @@ class CustomerControllerTest {
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
+
+        verify(registrationMetrics).record(RegistrationMetrics.DUPLICATE);
     }
 }

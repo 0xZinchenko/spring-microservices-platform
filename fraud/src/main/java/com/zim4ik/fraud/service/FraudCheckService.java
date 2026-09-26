@@ -7,6 +7,7 @@ import com.zim4ik.fraud.model.FraudReason;
 import com.zim4ik.fraud.repository.BlockedEmailDomainRepository;
 import com.zim4ik.fraud.repository.BlockedEmailRepository;
 import com.zim4ik.fraud.repository.FraudCheckHistoryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,7 @@ public class FraudCheckService {
     private final FraudCheckHistoryRepository fraudCheckHistoryRepository;
     private final BlockedEmailRepository blockedEmailRepository;
     private final BlockedEmailDomainRepository blockedEmailDomainRepository;
+    private final MeterRegistry meterRegistry;
 
     public FraudCheckResponse check(FraudCheckRequest request) {
         Optional<FraudReason> reason = findReason(request.email().trim().toLowerCase(Locale.ROOT));
@@ -33,6 +35,8 @@ public class FraudCheckService {
                         .createdAt(LocalDateTime.now())
                         .build()
         );
+        meterRegistry.counter("fraud.checks",
+                "result", reason.map(r -> r.name().toLowerCase(Locale.ROOT)).orElse("clean")).increment();
         return new FraudCheckResponse(reason.isPresent(), reason.orElse(null));
     }
 

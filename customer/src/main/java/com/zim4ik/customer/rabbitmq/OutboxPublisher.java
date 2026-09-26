@@ -2,6 +2,7 @@ package com.zim4ik.customer.rabbitmq;
 
 import com.zim4ik.customer.entity.OutboxEvent;
 import com.zim4ik.customer.repository.OutboxEventRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
@@ -41,6 +42,7 @@ public class OutboxPublisher {
     private final ObjectMapper objectMapper;
     private final Tracer tracer;
     private final Propagator propagator;
+    private final MeterRegistry meterRegistry;
 
     @Value("${outbox.publisher.batch-size:100}")
     private int batchSize;
@@ -57,10 +59,12 @@ public class OutboxPublisher {
             try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
                 send(event);
                 event.setPublishedAt(LocalDateTime.now());
+                meterRegistry.counter("outbox.events.published").increment();
                 log.info("📤 Published outbox event {} to {}", event.getId(), event.getExchange());
             } catch (RuntimeException e) {
                 span.error(e);
                 event.setAttempts(event.getAttempts() + 1);
+                meterRegistry.counter("outbox.publish.failures").increment();
                 event.setLastError(truncate(String.valueOf(e.getMessage())));
                 log.warn("⚠️ Failed to publish outbox event {} (attempt {}): {}",
                         event.getId(), event.getAttempts(), e.getMessage());

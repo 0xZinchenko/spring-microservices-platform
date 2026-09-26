@@ -4,6 +4,7 @@ package com.zim4ik.customer.controller;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
 import com.zim4ik.customer.dto.CustomerRegistrationResponse;
 import com.zim4ik.customer.entity.Customer;
+import com.zim4ik.customer.metrics.RegistrationMetrics;
 import com.zim4ik.customer.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -24,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("api/v1/customers")
 @Tag(name = "Customers", description = "Customer registration")
-public record CustomerController(CustomerService customerService) {
+public record CustomerController(CustomerService customerService, RegistrationMetrics registrationMetrics) {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -44,6 +45,7 @@ public record CustomerController(CustomerService customerService) {
             @Valid @RequestBody CustomerRegistrationRequest customerRegistrationRequest) {
         log.info("new customer registration {}", customerRegistrationRequest);
         Customer customer = customerService.registerCustomer(customerRegistrationRequest);
+        registrationMetrics.record(RegistrationMetrics.SUCCESS);
         return new CustomerRegistrationResponse(customer.getId());
     }
 }
