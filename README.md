@@ -27,7 +27,10 @@ but if the broker is down at that moment the notification is gone. Instead:
 - messages are sent with **correlated publisher confirms** and the `mandatory` flag: if the broker
   rejects the message or it cannot be routed to any queue, the event is not marked as published;
 - rows are selected with `FOR UPDATE SKIP LOCKED`, so several `customer` instances never send
-  the same event twice at the same time.
+  the same event twice at the same time;
+- `OutboxCleanupService` runs every hour and deletes events that were **published** more than 7 days ago,
+  in batches of 1000. Unpublished events are never deleted. Schedule, retention and batch size are
+  configured under `outbox.cleanup` in `application.yml`.
 
 Delivery is **at-least-once**: a message can be delivered more than once (for example, if the service
 crashes after RabbitMQ confirmed the message but before the row was marked as published).
@@ -329,6 +332,8 @@ and builds the Docker images.
 | customer | `CustomerServiceTest` | Registration logic with mocked dependencies |
 | customer | `CustomerControllerTest` | HTTP statuses `201`, `400`, `403`, `409`, `503` and error bodies |
 | customer | `CustomerRegistrationIntegrationTest` | Full flow on Postgres + RabbitMQ: customer and outbox event saved together, notification delivered, retry when the broker rejects the message or it is unroutable, trace context propagated to RabbitMQ, rollback when the customer is a fraudster or `fraud` fails, duplicate email rejected |
+| customer | `OutboxEventRepositoryTest` | Outbox SQL on Postgres: locking unpublished events, deleting only old published events in batches |
+| customer | `OutboxCleanupServiceTest` | Cleanup cutoff date and batch loop |
 | customer | `OutboxPublisherTest` | Message format, publisher confirms (ack / nack), recording failed attempts |
 | fraud | `FraudCheckServiceTest` | Fraud check result and history record |
 | fraud | `FraudCheckIntegrationTest` | Endpoint and Flyway schema on Postgres |
@@ -337,7 +342,6 @@ and builds the Docker images.
 
 ## Known limitations
 
-- Published outbox rows are never deleted; a cleanup job is needed for long-running systems.
 - `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
 - The gateway only routes `customer`; `fraud` and `notification` are internal services.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.

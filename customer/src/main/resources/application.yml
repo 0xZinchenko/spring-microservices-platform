@@ -56,6 +56,10 @@ outbox:
   publisher:
     fixed-delay: 1000
     batch-size: 100
+  cleanup:
+    cron: "0 0 * * * *"
+    retention: 7d
+    batch-size: 1000
 
 resilience4j:
   circuitbreaker:
