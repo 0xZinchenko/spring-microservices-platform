@@ -1,5 +1,6 @@
 package com.zim4ik.customer.service;
 
+import com.zim4ik.clients.fraud.FraudCheckRequest;
 import com.zim4ik.clients.fraud.FraudCheckResponse;
 import com.zim4ik.clients.fraud.FraudClient;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
@@ -46,8 +47,9 @@ public class CustomerService {
         }
         log.info("✅ Saved customer with id: {}", customer.getId());
 
-        FraudCheckResponse fraudResponse = fraudClient.isFraudster(customer.getId());
+        FraudCheckResponse fraudResponse = fraudClient.check(new FraudCheckRequest(customer.getId(), email));
         if (Boolean.TRUE.equals(fraudResponse.isFraudster())) {
+            log.warn("Customer {} rejected by fraud check: {}", customer.getId(), fraudResponse.reason());
             throw new CustomerFraudException(customer.getId());
         }
 

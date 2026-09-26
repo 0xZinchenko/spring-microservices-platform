@@ -40,7 +40,7 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -127,7 +127,7 @@ class CustomerRegistrationIntegrationTest {
 
     @Test
     void registerCustomer_persistsCustomerAndPublishesNotificationThroughOutbox() {
-        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        when(fraudClient.check(any())).thenReturn(new FraudCheckResponse(false, null));
 
         Customer customer = customerService.registerCustomer(REQUEST);
 
@@ -148,7 +148,7 @@ class CustomerRegistrationIntegrationTest {
 
     @Test
     void registerCustomer_keepsEventInOutboxAndRetries_whenBrokerRejectsMessage() {
-        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        when(fraudClient.check(any())).thenReturn(new FraudCheckResponse(false, null));
         rabbitAdmin.deleteExchange("internal.exchange");
 
         Customer customer = customerService.registerCustomer(REQUEST);
@@ -173,7 +173,7 @@ class CustomerRegistrationIntegrationTest {
 
     @Test
     void registerCustomer_keepsEventInOutboxAndRetries_whenMessageIsUnroutable() {
-        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        when(fraudClient.check(any())).thenReturn(new FraudCheckResponse(false, null));
         rabbitAdmin.removeBinding(testNotificationBinding);
 
         Customer customer = customerService.registerCustomer(REQUEST);
@@ -195,7 +195,7 @@ class CustomerRegistrationIntegrationTest {
 
     @Test
     void registerCustomer_rollsBackAndSendsNothing_whenFraudster() {
-        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(true));
+        when(fraudClient.check(any())).thenReturn(new FraudCheckResponse(true, "DISPOSABLE_EMAIL_DOMAIN"));
 
         assertThatThrownBy(() -> customerService.registerCustomer(REQUEST))
                 .isInstanceOf(CustomerFraudException.class);
@@ -207,7 +207,7 @@ class CustomerRegistrationIntegrationTest {
 
     @Test
     void registerCustomer_rollsBackAndSendsNothing_whenFraudServiceFails() {
-        when(fraudClient.isFraudster(anyInt())).thenThrow(new IllegalStateException("fraud is down"));
+        when(fraudClient.check(any())).thenThrow(new IllegalStateException("fraud is down"));
 
         assertThatThrownBy(() -> customerService.registerCustomer(REQUEST))
                 .isInstanceOf(IllegalStateException.class);
@@ -219,7 +219,7 @@ class CustomerRegistrationIntegrationTest {
 
     @Test
     void registerCustomer_rejectsSecondRegistration_withSameEmailInDifferentCase() {
-        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        when(fraudClient.check(any())).thenReturn(new FraudCheckResponse(false, null));
         customerService.registerCustomer(REQUEST);
 
         assertThatThrownBy(() -> customerService.registerCustomer(
@@ -228,12 +228,12 @@ class CustomerRegistrationIntegrationTest {
 
         assertThat(customerRepository.count()).isEqualTo(1);
         assertThat(outboxEventRepository.count()).isEqualTo(1);
-        verify(fraudClient, times(1)).isFraudster(anyInt());
+        verify(fraudClient, times(1)).check(any());
     }
 
     @Test
     void registerCustomer_propagatesTraceContextThroughOutboxToRabbitMq() {
-        when(fraudClient.isFraudster(anyInt())).thenReturn(new FraudCheckResponse(false));
+        when(fraudClient.check(any())).thenReturn(new FraudCheckResponse(false, null));
         Span requestSpan = tracer.nextSpan().name("test request").start();
         try (Tracer.SpanInScope ignored = tracer.withSpan(requestSpan)) {
             customerService.registerCustomer(REQUEST);

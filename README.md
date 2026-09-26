@@ -7,7 +7,8 @@ Event-driven microservices on **Spring Boot 4** and **Spring Cloud** with reliab
 
 When a customer registers, the `customer` service:
 1. validates the request, checks that the email is not taken and saves the customer to its own PostgreSQL database;
-2. calls `fraud` **synchronously** (OpenFeign, resolved through Eureka, protected by a circuit breaker);
+2. calls `fraud` **synchronously** (OpenFeign, resolved through Eureka, protected by a circuit breaker)
+   to check the email against the fraud rules;
 3. if the check fails or `fraud` is unavailable, the whole registration is **rolled back**;
 4. stores a notification event in the `outbox_event` table **in the same transaction** as the customer;
 5. a scheduled publisher sends pending outbox events to RabbitMQ **asynchronously**,
@@ -35,6 +36,26 @@ but if the broker is down at that moment the notification is gone. Instead:
 Delivery is **at-least-once**: a message can be delivered more than once (for example, if the service
 crashes after RabbitMQ confirmed the message but before the row was marked as published).
 Each message carries a unique `messageId` (`customer-outbox-<id>`), which lets the consumer detect duplicates.
+
+### Fraud rules
+
+`fraud` rejects a customer when:
+
+| Rule | Reason | Source |
+|---|---|---|
+| The email is on the blocklist | `BLOCKED_EMAIL` | table `blocked_email` |
+| The email domain is a disposable email provider (`mailinator.com`, `yopmail.com`, …) | `DISPOSABLE_EMAIL_DOMAIN` | table `blocked_email_domain`, seeded by a Flyway migration |
+
+Emails are compared case-insensitively. Every check is stored in `fraud_check_history` with its reason.
+The client only gets `403 Registration rejected by the fraud check`: the matched rule is logged but not
+returned, so the response does not tell how to bypass the check.
+
+Block an email or a domain (for example, from pgAdmin, database `fraud`):
+
+```sql
+INSERT INTO blocked_email (email) VALUES ('someone@example.com');
+INSERT INTO blocked_email_domain (domain) VALUES ('spam-domain.com');
+```
 
 ### Retries, Dead Letter Queue and idempotency
 
@@ -83,7 +104,7 @@ Every request gets a trace id that follows it through all services, including th
 gateway       SERVER    POST /api/v1/customers
   customer    SERVER    POST /api/v1/customers
     customer            circuit-breaker
-      fraud   SERVER    GET /api/v1/fraud-check/{customerId}
+      fraud   SERVER    POST /api/v1/fraud-check
     customer            outbox publish
       customer PRODUCER internal.exchange send
         notification CONSUMER notification.queue receive
@@ -295,9 +316,13 @@ Possible error responses (in [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) 
 Check the fraud service directly:
 
 ```bash
-curl http://localhost:8081/api/v1/fraud-check/1
-# {"isFraudster":false}
+curl -X POST http://localhost:8081/api/v1/fraud-check \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":1,"email":"someone@mailinator.com"}'
+# {"isFraudster":true,"reason":"DISPOSABLE_EMAIL_DOMAIN"}
 ```
+
+Try the `403` through the gateway with a disposable email, for example `spam@mailinator.com`.
 
 ### How to verify the flow
 
@@ -314,7 +339,7 @@ curl http://localhost:8081/api/v1/fraud-check/1
 | Method | Path | Service | Description |
 |---|---|---|---|
 | `POST` | `/api/v1/customers` | customer (via gateway) | Register a customer |
-| `GET` | `/api/v1/fraud-check/{customerId}` | fraud | Check if a customer is a fraudster |
+| `POST` | `/api/v1/fraud-check` | fraud | Check a customer (`customerId`, `email`) against the fraud rules |
 | `POST` | `/api/v1/notification` | notification | Send a notification directly (sync, bypasses RabbitMQ) |
 
 Interactive documentation (Swagger UI, generated with springdoc-openapi):
@@ -347,20 +372,19 @@ and builds the Docker images.
 | customer | `OutboxEventRepositoryTest` | Outbox SQL on Postgres: locking unpublished events, deleting only old published events in batches |
 | customer | `OutboxCleanupServiceTest` | Cleanup cutoff date and batch loop |
 | customer | `OutboxPublisherTest` | Message format, publisher confirms (ack / nack), recording failed attempts |
-| fraud | `FraudCheckServiceTest` | Fraud check result and history record |
-| fraud | `FraudCheckIntegrationTest` | Endpoint and Flyway schema on Postgres |
+| fraud | `FraudCheckServiceTest` | Fraud rules: clean email, blocked email, disposable domain; history record |
+| fraud | `FraudCheckIntegrationTest` | Endpoint on Postgres: seeded disposable domains, blocklist, validation, history with reason |
 | notification | `NotificationServiceTest` | Notification mapping and skipping duplicates |
 | notification | `NotificationConsumerIntegrationTest` | Message from RabbitMQ is stored in Postgres, duplicates are ignored, failing and malformed messages end up in the DLQ |
 
 ## Known limitations
 
-- `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
+- Fraud blocklists are managed with SQL; there is no admin API for them yet.
 - The gateway only routes `customer`; `fraud` and `notification` are internal services.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
 
 ## Roadmap
 
-- [ ] Real fraud-check logic
 - [ ] Centralized configuration (Spring Cloud Config)
 - [ ] Kubernetes deployment
 - [x] Unit and integration tests (Testcontainers)
@@ -373,6 +397,7 @@ and builds the Docker images.
 - [x] Transactional Outbox for reliable event publishing
 - [x] Retries, Dead Letter Queue and idempotent consumer
 - [x] Unique customer email with `409 Conflict`
+- [x] Fraud rules: email blocklist and disposable email domains
 - [x] Distributed tracing (Micrometer Tracing + Zipkin) and Actuator health checks
 
 ## Author

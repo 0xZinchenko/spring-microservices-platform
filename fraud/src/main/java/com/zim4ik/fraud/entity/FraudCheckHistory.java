@@ -1,6 +1,7 @@
 package com.zim4ik.fraud.entity;
 
 
+import com.zim4ik.fraud.model.FraudReason;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,5 +29,7 @@ public class FraudCheckHistory {
     private Integer id;
     private Integer customerId;
     private Boolean isFraudster;
+    @Enumerated(EnumType.STRING)
+    private FraudReason reason;
     private LocalDateTime createdAt;
 }

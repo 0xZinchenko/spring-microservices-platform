@@ -36,7 +36,7 @@ public class CustomerExceptionHandler {
     @ExceptionHandler(CustomerFraudException.class)
     public ProblemDetail handleFraud(CustomerFraudException e) {
         log.warn(e.getMessage());
-        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Registration rejected by the fraud check");
     }
 
     @ExceptionHandler(NoFallbackAvailableException.class)

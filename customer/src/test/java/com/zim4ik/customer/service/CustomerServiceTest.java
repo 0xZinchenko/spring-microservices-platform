@@ -1,5 +1,6 @@
 package com.zim4ik.customer.service;
 
+import com.zim4ik.clients.fraud.FraudCheckRequest;
 import com.zim4ik.clients.fraud.FraudCheckResponse;
 import com.zim4ik.clients.fraud.FraudClient;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
@@ -20,10 +21,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,7 +51,7 @@ class CustomerServiceTest {
             customer.setId(1);
             return customer;
         });
-        when(fraudClient.isFraudster(1)).thenReturn(new FraudCheckResponse(false));
+        when(fraudClient.check(new FraudCheckRequest(1, "yan@example.com"))).thenReturn(new FraudCheckResponse(false, null));
 
         Customer customer = customerService.registerCustomer(REQUEST);
 
@@ -72,7 +72,7 @@ class CustomerServiceTest {
             customer.setId(2);
             return customer;
         });
-        when(fraudClient.isFraudster(2)).thenReturn(new FraudCheckResponse(true));
+        when(fraudClient.check(new FraudCheckRequest(2, "yan@example.com"))).thenReturn(new FraudCheckResponse(true, "BLOCKED_EMAIL"));
 
         assertThatThrownBy(() -> customerService.registerCustomer(REQUEST))
                 .isInstanceOf(CustomerFraudException.class)
@@ -88,7 +88,7 @@ class CustomerServiceTest {
             customer.setId(3);
             return customer;
         });
-        when(fraudClient.isFraudster(3)).thenThrow(new IllegalStateException("fraud is down"));
+        when(fraudClient.check(new FraudCheckRequest(3, "yan@example.com"))).thenThrow(new IllegalStateException("fraud is down"));
 
         assertThatThrownBy(() -> customerService.registerCustomer(REQUEST))
                 .isInstanceOf(IllegalStateException.class);
@@ -103,7 +103,7 @@ class CustomerServiceTest {
             customer.setId(4);
             return customer;
         });
-        when(fraudClient.isFraudster(4)).thenReturn(new FraudCheckResponse(false));
+        when(fraudClient.check(new FraudCheckRequest(4, "yan@example.com"))).thenReturn(new FraudCheckResponse(false, null));
 
         Customer customer = customerService.registerCustomer(
                 new CustomerRegistrationRequest("Yan", "Zinchenko", "  Yan@Example.COM "));
@@ -132,7 +132,7 @@ class CustomerServiceTest {
         assertThatThrownBy(() -> customerService.registerCustomer(REQUEST))
                 .isInstanceOf(CustomerAlreadyExistsException.class);
 
-        verify(fraudClient, never()).isFraudster(anyInt());
+        verify(fraudClient, never()).check(any());
         verifyNoInteractions(eventPublisher);
     }
 }

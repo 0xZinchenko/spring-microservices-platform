@@ -1,4 +1,6 @@
 package com.zim4ik.fraud.dto;
 
-public record FraudCheckResponse(Boolean isFraudster) {
+import com.zim4ik.fraud.model.FraudReason;
+
+public record FraudCheckResponse(Boolean isFraudster, FraudReason reason) {
 }
