@@ -4,11 +4,13 @@ server:
 spring:
   application:
     name: fraud
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
 
   datasource:
     url: jdbc:postgresql://localhost:5432/fraud
-    username: zim4ik
-    password: password
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
 
   jpa:
     show-sql: true

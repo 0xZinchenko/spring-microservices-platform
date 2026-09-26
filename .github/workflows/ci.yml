@@ -36,5 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Create .env
+        run: cp .env.example .env
+
       - name: Build images
         run: docker compose --profile app build

@@ -2,6 +2,11 @@
 # start-dev.sh - Запуск микросервисов для локальной разработки
 set -e
 
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "📝 Created .env from .env.example"
+fi
+
 echo "🚀 Starting infrastructure..."
 docker compose up -d
 sleep 5

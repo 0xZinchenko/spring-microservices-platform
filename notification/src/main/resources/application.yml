@@ -3,10 +3,12 @@ server:
 spring:
   application:
     name: notification
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   datasource:
-    password: password
+    password: ${POSTGRES_PASSWORD}
     url: jdbc:postgresql://localhost:5432/notification
-    username: zim4ik
+    username: ${POSTGRES_USER}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -16,6 +18,8 @@ spring:
     show-sql: true
   rabbitmq:
     addresses: localhost:5672
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
     listener:
       simple:
         observation-enabled: true

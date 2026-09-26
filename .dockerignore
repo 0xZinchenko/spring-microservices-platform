@@ -6,3 +6,4 @@
 docker
 *.md
 start-dev.sh
+.env

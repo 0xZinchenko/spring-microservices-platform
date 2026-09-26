@@ -4,11 +4,13 @@ server:
 spring:
   application:
     name: customer
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
 
   datasource:
     url: jdbc:postgresql://localhost:5432/customer
-    username: zim4ik
-    password: password
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
 
   jpa:
     show-sql: true
@@ -29,8 +31,8 @@ spring:
   rabbitmq:
     host: localhost
     port: 5672
-    username: guest
-    password: guest
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
     publisher-confirm-type: correlated
     publisher-returns: true
     template:

@@ -130,13 +130,14 @@ Infrastructure (from `docker-compose.yml`):
 
 | Service | URL / port | Credentials |
 |---|---|---|
-| PostgreSQL | `localhost:5432` | `zim4ik` / `password` |
-| pgAdmin | http://localhost:5050 | `pgadmin@admin.com` / `admin` |
-| RabbitMQ | `localhost:5672` | `guest` / `guest` |
-| RabbitMQ Management UI | http://localhost:15672 | `guest` / `guest` |
+| PostgreSQL | `localhost:5432` | `POSTGRES_USER` / `POSTGRES_PASSWORD` |
+| pgAdmin | http://localhost:5050 | `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` |
+| RabbitMQ | `localhost:5672` | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` |
+| RabbitMQ Management UI | http://localhost:15672 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` |
 | Zipkin | http://localhost:9411 | — |
 
-> These credentials are for local development only.
+Credentials are not stored in the repository. They live in a local `.env` file (ignored by git and
+excluded from Docker images), created from [`.env.example`](.env.example).
 
 ## Project structure
 
@@ -168,6 +169,16 @@ customer/src/main/
 
 - Docker with Docker Compose
 - JDK 17 and Maven 3.9+ (only for running services locally, outside Docker)
+
+### Configure credentials
+
+```bash
+cp .env.example .env
+```
+
+Then change the passwords in `.env`. The same file is used by Docker Compose and by services started
+locally (they import it with `spring.config.import`). `./start-dev.sh` creates `.env` automatically
+if it does not exist. Tests do not need it: Testcontainers provides its own credentials.
 
 ### Option 1: everything in Docker
 
@@ -330,7 +341,6 @@ and builds the Docker images.
 - `FraudCheckService` is a stub: it always returns `isFraudster = false`, so `403` is never returned yet.
 - The gateway only routes `customer`; `fraud` and `notification` are internal services.
 - `notification` has a `spring.zipkin` setting, but Zipkin is not in the dependencies or in Docker Compose.
-- Credentials are hardcoded in `application.yml` (fine for local dev only).
 
 ## Roadmap
 
