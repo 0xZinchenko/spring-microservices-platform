@@ -340,7 +340,6 @@ Try the `403` through the gateway with a disposable email, for example `spam@mai
 |---|---|---|---|
 | `POST` | `/api/v1/customers` | customer (via gateway) | Register a customer |
 | `POST` | `/api/v1/fraud-check` | fraud | Check a customer (`customerId`, `email`) against the fraud rules |
-| `POST` | `/api/v1/notification` | notification | Send a notification directly (sync, bypasses RabbitMQ) |
 
 Interactive documentation (Swagger UI, generated with springdoc-openapi):
 
@@ -348,7 +347,6 @@ Interactive documentation (Swagger UI, generated with springdoc-openapi):
 |---|---|---|
 | customer | http://localhost:8080/swagger-ui.html | http://localhost:8080/v3/api-docs |
 | fraud | http://localhost:8081/swagger-ui.html | http://localhost:8081/v3/api-docs |
-| notification | http://localhost:8082/swagger-ui.html | http://localhost:8082/v3/api-docs |
 
 In Swagger UI, open *Customers → POST /api/v1/customers → Try it out* to register a customer with
 the example request and see every possible response (`201`, `400`, `403`, `409`, `503`).

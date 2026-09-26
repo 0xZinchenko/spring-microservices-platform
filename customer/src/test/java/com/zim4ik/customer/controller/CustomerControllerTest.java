@@ -1,7 +1,6 @@
 package com.zim4ik.customer.controller;
 
 import com.zim4ik.clients.fraud.FraudClient;
-import com.zim4ik.clients.notification.NotificationClient;
 import com.zim4ik.customer.dto.CustomerRegistrationRequest;
 import com.zim4ik.customer.entity.Customer;
 import com.zim4ik.customer.exception.CustomerAlreadyExistsException;
@@ -40,9 +39,6 @@ class CustomerControllerTest {
 
     @MockitoBean
     private FraudClient fraudClient;
-
-    @MockitoBean
-    private NotificationClient notificationClient;
 
     @Test
     void register_returns201WithCustomerId() throws Exception {

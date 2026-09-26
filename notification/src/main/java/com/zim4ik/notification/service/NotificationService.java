@@ -16,10 +16,6 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
 
-    public void send(NotificationRequest notificationRequest) {
-        send(notificationRequest, null);
-    }
-
     public void send(NotificationRequest notificationRequest, String sourceMessageId) {
         if (sourceMessageId != null && notificationRepository.existsBySourceMessageId(sourceMessageId)) {
             log.info("♻️ Skipping duplicate message {}", sourceMessageId);

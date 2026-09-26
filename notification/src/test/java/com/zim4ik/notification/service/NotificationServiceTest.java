@@ -27,7 +27,7 @@ class NotificationServiceTest {
 
     @Test
     void send_savesNotification() {
-        notificationService.send(new NotificationRequest(1, "yan@example.com", "Welcome, Yan!"));
+        notificationService.send(new NotificationRequest(1, "yan@example.com", "Welcome, Yan!"), null);
 
         ArgumentCaptor<Notification> notification = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(notification.capture());
